@@ -1,0 +1,140 @@
+{
+  "trials": 40,
+  "results": {
+    "none": {
+      "none": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "pre_charge": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "post_charge_pre_record": {
+        "CORRECT": 0,
+        "DUPLICATE": 40,
+        "LOST": 0
+      },
+      "post_charge_record": {
+        "CORRECT": 0,
+        "DUPLICATE": 40,
+        "LOST": 0
+      },
+      "post_receipt_pre_record": {
+        "CORRECT": 0,
+        "DUPLICATE": 40,
+        "LOST": 0
+      },
+      "post_receipt_record": {
+        "CORRECT": 0,
+        "DUPLICATE": 40,
+        "LOST": 0
+      }
+    },
+    "checkpoint": {
+      "none": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "pre_charge": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "post_charge_pre_record": {
+        "CORRECT": 0,
+        "DUPLICATE": 40,
+        "LOST": 0
+      },
+      "post_charge_record": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "post_receipt_pre_record": {
+        "CORRECT": 0,
+        "DUPLICATE": 40,
+        "LOST": 0
+      },
+      "post_receipt_record": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      }
+    },
+    "dbos": {
+      "none": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "pre_charge": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "post_charge_pre_record": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "post_charge_record": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "post_receipt_pre_record": {
+        "CORRECT": 0,
+        "DUPLICATE": 40,
+        "LOST": 0
+      },
+      "post_receipt_record": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      }
+    },
+    "agenttx": {
+      "none": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "pre_charge": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "post_charge_pre_record": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "post_charge_record": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "post_receipt_pre_record": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      },
+      "post_receipt_record": {
+        "CORRECT": 40,
+        "DUPLICATE": 0,
+        "LOST": 0
+      }
+    }
+  },
+  "verdict": {
+    "naive_baselines_fail": true,
+    "dbos_fails_on_nontransactional": true,
+    "dbos_exactly_once_on_transactional": true,
+    "agenttx_exactly_once_both": true,
+    "GATE1A_PASS": true
+  }
+}
