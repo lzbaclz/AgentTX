@@ -1,0 +1,10 @@
+{
+  "baseline": "real-LangGraph",
+  "langgraph_version": "1.2.6",
+  "checkpointer": "PostgresSaver",
+  "run_crashed_rc": 137,
+  "charges": 2,
+  "receipts": 2,
+  "effect_duplicated_on_resume": true,
+  "reads": "REAL LangGraph + PostgresSaver: a node's side effect is NOT atomic with the post-node checkpoint; a crash in the effect/checkpoint window re-runs the node on resume -> duplicate effect. Same gap as the Gate-1a naive-checkpoint baseline."
+}

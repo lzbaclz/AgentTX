@@ -1,0 +1,9 @@
+{
+  "baseline": "real-DBOS",
+  "dbos_version": "2.25.0",
+  "charges": 1,
+  "receipts": 2,
+  "transactional_exactly_once": true,
+  "nontransactional_duplicated": true,
+  "reads": "REAL DBOS: transactional charge step is exactly-once (effect+checkpoint in one Postgres tx); the non-transactional receipt @DBOS.step re-runs on recovery after a crash in the effect/record window -> duplicate file. Confirms the Gate-1a faithful-DBOS finding against the real system."
+}
