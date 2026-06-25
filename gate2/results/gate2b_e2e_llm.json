@@ -1,0 +1,13 @@
+{
+  "model": "/public/model_zoo/Llama-3.1-8B-Instruct",
+  "ctx_tokens": 16384,
+  "tool_exactly_once_across_crash": true,
+  "charge_count_before_crash": 1,
+  "charge_count_after_recovery": 1,
+  "kv_restored_GB": 2.147,
+  "kv_restore_fired": true,
+  "recover_via_restore_ms": 201.8,
+  "recover_via_reprefill_ms": 1576.0,
+  "recovery_speedup": 7.81,
+  "GATE2B_PASS": true
+}
