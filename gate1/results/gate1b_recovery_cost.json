@@ -1,0 +1,36 @@
+{
+  "model": "/public/model_zoo/Llama-3.1-8B-Instruct",
+  "rows": [
+    {
+      "ctx_tokens": 4096,
+      "reprefill_ms": 308.3,
+      "restore_ms": 169.4,
+      "speedup": 1.82,
+      "restored_GB": 0.537,
+      "restore_fired": true
+    },
+    {
+      "ctx_tokens": 16384,
+      "reprefill_ms": 1521.3,
+      "restore_ms": 122.2,
+      "speedup": 12.45,
+      "restored_GB": 2.147,
+      "restore_fired": true
+    },
+    {
+      "ctx_tokens": 32768,
+      "reprefill_ms": 3830.2,
+      "restore_ms": 225.7,
+      "speedup": 16.97,
+      "restored_GB": 4.295,
+      "restore_fired": true
+    }
+  ],
+  "verdict": {
+    "GATE1B_PASS": true,
+    "longest_ctx": 32768,
+    "longest_speedup": 16.97,
+    "speedup_grows_with_ctx": true,
+    "reads": "KV-snapshot restore vs transcript-replay re-prefill; gate on the longest restored context (recovery cost is significant there; short ctx is cheap either way)."
+  }
+}
