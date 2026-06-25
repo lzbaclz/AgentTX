@@ -1,0 +1,12 @@
+{
+  "ctx": 8192,
+  "determinism_floor_overlap": 0.188,
+  "restore_overlap": 0.188,
+  "restore_as_faithful_as_cache_hit": true,
+  "restore_ms": 254.5,
+  "reprefill_ms": 856.6,
+  "speedup": 3.37,
+  "provenance_fail_closed_on_stale": true,
+  "byte_exact_kv_proven_in": "phase2/results/kvview_gpu.json (torch.equal)",
+  "KVVIEW_E2E_PASS": true
+}

@@ -1,0 +1,9 @@
+{
+  "n_blocks": 24,
+  "block_MB": 2.0,
+  "total_MB": 48.0,
+  "valid_restore_byte_exact": true,
+  "corrupt_block_fail_closed": true,
+  "provenance_mismatch_fail_closed": true,
+  "KVVIEW_GPU_PASS": true
+}
