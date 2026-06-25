@@ -1,0 +1,15 @@
+{
+  "mode": "subprocess os._exit",
+  "trials": 500,
+  "recover_crash_prob": 0.4,
+  "tally": {
+    "CORRECT": 500,
+    "DUPLICATE": 0,
+    "LOST": 0
+  },
+  "supported_tools": [
+    "sql(transactional)",
+    "fs(overlay/content-addressed)"
+  ],
+  "GATE2A_PASS": true
+}

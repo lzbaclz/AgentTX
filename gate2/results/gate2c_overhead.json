@@ -1,0 +1,13 @@
+{
+  "n_turns": 3000,
+  "baseline_ms_per_turn": 0.0516,
+  "agenttx_ms_per_turn": 0.7469,
+  "overhead_ms_per_turn": 0.6952,
+  "overhead_pct_of_representative_turn": {
+    "turn_cost_100ms": 0.7,
+    "turn_cost_200ms": 0.35,
+    "turn_cost_500ms": 0.14
+  },
+  "GATE2C_PASS": true,
+  "reads": "AgentTx durability bookkeeping per turn (WAL + gateway + fsync + atomic FS commit) vs a no-persistence baseline doing the same effects. Overhead is reported as a fraction of a representative agent-turn cost (LLM+tool, >=100ms)."
+}
