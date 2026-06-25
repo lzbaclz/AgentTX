@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 /tmp_store/
+# PostgreSQL data directory — a live DB cluster, never version it
+pgdata/
+*.log
