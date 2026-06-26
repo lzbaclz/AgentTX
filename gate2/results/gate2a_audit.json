@@ -1,9 +1,9 @@
 {
   "mode": "in-process",
-  "trials": 10000,
+  "trials": 2000,
   "recover_crash_prob": 0.4,
   "tally": {
-    "CORRECT": 10000,
+    "CORRECT": 2000,
     "DUPLICATE": 0,
     "LOST": 0
   },

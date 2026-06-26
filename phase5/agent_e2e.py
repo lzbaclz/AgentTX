@@ -68,8 +68,8 @@ def main():
     db = open_sqlite(f"{store}/app.db"); gw = Gateway(db, store); kv = KVView(f"{store}/cas", db)
     client = {"ack": 0, "recv": []}
     try:
-        for tool, args in plan:
-            gw.call("s", turn, tool, args, Clock(0))
+        for ordinal, (tool, args) in enumerate(plan):
+            gw.call("s", turn, tool, args, Clock(0), ordinal=ordinal, commit_id=turn)
         kv.snapshot(turn, prov, [str(t).encode() for t in out_ref])
         raise Crash()                      # crash: effects done, turn not committed, output not streamed
     except Crash:
@@ -82,8 +82,8 @@ def main():
 
     # ---- RECOVERY: tools dedup (exactly-once), KV restore, stream output ----
     db = open_sqlite(f"{store}/app.db"); gw = Gateway(db, store); kv = KVView(f"{store}/cas", db)
-    for tool, args in plan:
-        gw.call("s", turn, tool, args, Clock(0))      # gateway dedup -> no double effect
+    for ordinal, (tool, args) in enumerate(plan):
+        gw.call("s", turn, tool, args, Clock(0), ordinal=ordinal, commit_id=turn)  # dedup -> no double effect
     rr = kv.restore(turn, prov)
     torch.cuda.synchronize(); out_restore, ms_restore = gen()     # offload restore
     fresh = [lo + 777] + [rng.randrange(lo, hi) for _ in range(CTX - 1)]

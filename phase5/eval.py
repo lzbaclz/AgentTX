@@ -23,7 +23,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agenttx.db import open_sqlite
 from agenttx.core import Clock, Crash
-from agenttx.gateway import Gateway, action_key
+from agenttx.gateway import Gateway
+from agenttx.identity import action_id
 from agenttx.kvview import KVView, Provenance, sha256_hex
 from agenttx.tools import ChargeTool, ReceiptTool
 
@@ -55,14 +56,14 @@ def run_turn(db, gw, kv, order, turn, client, clock, corrupt_kv=False):
     sess = "s"
     db.execute("INSERT OR IGNORE INTO wal(turn,type,key) VALUES(?,?,?)", (turn, "BEGIN_TURN", ""))
     db.commit(); clock.tick()
-    # step 1: SQL charge (transactional, exactly-once via same-tx record)
-    r1 = gw.call(sess, turn, CHARGE, {"order": order, "amount": 100}, clock)
+    # step 1: SQL charge (transactional, exactly-once via same-tx record) -- ordinal 0
+    r1 = gw.call(sess, turn, CHARGE, {"order": order, "amount": 100}, clock, ordinal=0, commit_id="c")
     if r1.status in ("committed", "dedup_hit"):       # observation ONLY after a committed effect
         db.execute("INSERT OR IGNORE INTO wal(turn,type,key) VALUES(?,?,?)", (turn, "OBSERVATION", r1.key))
         db.commit()
     clock.tick()
-    # step 2: FS receipt (overlay, content-addressed)
-    r2 = gw.call(sess, turn, RECEIPT, {"order": order}, clock)
+    # step 2: FS receipt (overlay, keyed by action id) -- ordinal 1
+    r2 = gw.call(sess, turn, RECEIPT, {"order": order}, clock, ordinal=1, commit_id="c")
     if r2.status in ("committed", "dedup_hit"):
         db.execute("INSERT OR IGNORE INTO wal(turn,type,key) VALUES(?,?,?)", (turn, "OBSERVATION", r2.key))
         db.commit()
@@ -127,7 +128,7 @@ def main():
         client = trial(store, svc_db, order, turn, mode, rng)
         db = open_sqlite(svc_db)
         nc = db.execute("SELECT COUNT(*) FROM charges WHERE order_id=?", (order,)).fetchone()[0]
-        rkey = action_key("s", turn, RECEIPT.name, {"order": order})
+        rkey = action_id("s", turn, "c", 1)            # receipt is ordinal 1 of the turn's plan
         nr = 1 if os.path.exists(f"{store}/committed/{rkey}.receipt") else 0
         # ghost check: every OBSERVATION key must be a committed gateway key
         obs = [r[0] for r in db.execute("SELECT key FROM wal WHERE turn=? AND type='OBSERVATION'", (turn,)).fetchall()]

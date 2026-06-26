@@ -40,8 +40,9 @@ def _conn(path):
     return c
 
 
-def action_key(turn, tool, args):
-    return hashlib.sha1(f"{turn}|{tool}|{args}".encode()).hexdigest()[:16]
+def action_key(turn, tool, args, ordinal=0):
+    # POSITIONAL identity (ordinal) + full sha256 (no truncation -> no silent false dedup).
+    return hashlib.sha256(f"{turn}|{ordinal}|{tool}|{args}".encode()).hexdigest()
 
 
 class TurnWAL:
@@ -112,8 +113,8 @@ class Coordinator:
         if not self.wal.has("BEGIN_TURN", turn):
             self.wal.append("BEGIN_TURN", turn)
         clock.tick()
-        for tool, args in plan:
-            key = action_key(turn, tool, args)
+        for ordinal, (tool, args) in enumerate(plan):
+            key = action_key(turn, tool, args, ordinal)
             self.wal.append("ACTION_PREPARED", turn, key); clock.tick()
             if tool == "sql":
                 self.gw.sql_charge(key, args[0], args[1], clock)

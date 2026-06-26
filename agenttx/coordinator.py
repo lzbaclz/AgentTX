@@ -3,6 +3,7 @@ turn and the gateway's per-class mechanism makes supported tools exactly-once.""
 from __future__ import annotations
 
 from agenttx.gateway import Gateway
+from agenttx.identity import commit_id_of
 from agenttx.wal import TurnWAL
 
 
@@ -14,14 +15,17 @@ class Coordinator:
         self.gw = Gateway(db, store)
 
     def run_turn(self, session, turn, plan, clock):
-        """plan = [(Tool, args_dict), ...]. Returns the per-action Results."""
+        """plan = [(Tool, args_dict), ...]. Returns the per-action Results. Each action's identity
+        is its POSITION (ordinal) in the plan bound to the plan's commit_id -- so recovery re-runs
+        the same plan and dedups by position, and two identical calls both execute."""
+        commit_id = commit_id_of([(t.name, a) for t, a in plan])
         if not self.wal.has(session, turn, "BEGIN_TURN"):
             self.wal.append(session, turn, "BEGIN_TURN")
         clock.tick()
         results = []
-        for tool, args in plan:
+        for ordinal, (tool, args) in enumerate(plan):
             self.wal.append(session, turn, "ACTION_PREPARED", tool.name); clock.tick()
-            res = self.gw.call(session, turn, tool, args, clock)
+            res = self.gw.call(session, turn, tool, args, clock, ordinal=ordinal, commit_id=commit_id)
             results.append(res)
             self.wal.append(session, turn, "OBSERVATION_COMMITTED", res.key); clock.tick()
         if not self.wal.has(session, turn, "TURN_COMMITTED"):

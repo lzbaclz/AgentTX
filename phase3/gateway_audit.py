@@ -29,14 +29,15 @@ def run_trial(tool, args_fn, rng):
     g = Gateway(open_postgres(), STORE)
     status = None
     try:
-        status = g.call(session, turn, tool, args, Clock(rng.randint(1, MAXT), hard=False)).status
+        status = g.call(session, turn, tool, args, Clock(rng.randint(1, MAXT), hard=False),
+                        ordinal=0, commit_id="c").status
     except Crash:
         pass
     g.db.rollback(); g.db.close()
     # recover: fresh gateway re-runs the same call (gateway dedup / idempotency makes it safe)
     g2 = Gateway(open_postgres(), STORE)
     try:
-        status = g2.call(session, turn, tool, args, Clock(0)).status
+        status = g2.call(session, turn, tool, args, Clock(0), ordinal=0, commit_id="c").status
     except Crash:
         pass
     g2.db.close()

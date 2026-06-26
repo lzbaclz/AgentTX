@@ -20,16 +20,20 @@ Fixes the single-owner gaps the advisor flagged in agenttx/gateway.py:
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 
+# Single shared identity (full sha256, ordinal-based). Re-exported so phase7/phase8 keep importing
+# `action_id`/`commit_id_of` from here while the SEMANTICS live in one place (agenttx/identity.py).
+from agenttx.identity import (  # noqa: F401
+    ContentMismatch,
+    action_id,
+    args_fingerprint,
+    commit_id_of,
+)
+
 
 class StaleOwner(Exception):
-    pass
-
-
-class ContentMismatch(Exception):
     pass
 
 
@@ -38,20 +42,8 @@ class Crash(Exception):
 
 
 def _canon(args):
-    return json.dumps(args, sort_keys=True, default=str)
-
-
-def action_id(session, turn, commit_id, ordinal):
-    return hashlib.sha1(f"{session}|{turn}|{commit_id}|{ordinal}".encode()).hexdigest()[:24]
-
-
-def args_fingerprint(args):
-    return hashlib.sha1(_canon(args).encode()).hexdigest()[:16]
-
-
-def commit_id_of(plan):
-    """Stand-in for the hash of the committed model output that produced this plan."""
-    return hashlib.sha1(_canon(plan).encode()).hexdigest()[:16]
+    from agenttx.identity import canonical_args
+    return canonical_args(args)
 
 
 class DTX:
