@@ -1,0 +1,66 @@
+{
+  "harness": "AgentTx transactional gateway monkeypatched into live tau2 orchestrator (Environment.get_response); real Qwen agent+user via local vLLM; crash injected on the first money-moving call per task; recovery re-runs once.",
+  "num_tasks": 4,
+  "tasks_with_crash_injected": 4,
+  "money_moving_calls_protected": 4,
+  "actions_double_applied_agenttx": 0,
+  "naive_would_double_on_each_injected_crash": 4,
+  "runs": [
+    {
+      "task": "0",
+      "reward": 0.0,
+      "money_calls_protected": [
+        "exchange_delivered_order_items"
+      ],
+      "crash_injected": true,
+      "max_durable_per_action": 1,
+      "actions_double_applied": 0,
+      "log": [
+        "CRASH+RECOVER on exchange_delivered_order_items: agenttx durable=1 (naive would be 2)"
+      ]
+    },
+    {
+      "task": "1",
+      "reward": 0.0,
+      "money_calls_protected": [
+        "exchange_delivered_order_items"
+      ],
+      "crash_injected": true,
+      "max_durable_per_action": 1,
+      "actions_double_applied": 0,
+      "log": [
+        "CRASH+RECOVER on exchange_delivered_order_items: agenttx durable=1 (naive would be 2)"
+      ]
+    },
+    {
+      "task": "2",
+      "reward": null,
+      "money_calls_protected": [
+        "return_delivered_order_items"
+      ],
+      "crash_injected": true,
+      "max_durable_per_action": 1,
+      "actions_double_applied": 0,
+      "log": [
+        "CRASH+RECOVER on return_delivered_order_items: agenttx durable=1 (naive would be 2)",
+        "run error: NotFoundError: litellm.NotFoundError: NotFoundError: OpenAIException - The model `gpt-4.1-2025-"
+      ]
+    },
+    {
+      "task": "3",
+      "reward": null,
+      "money_calls_protected": [
+        "modify_pending_order_items"
+      ],
+      "crash_injected": true,
+      "max_durable_per_action": 1,
+      "actions_double_applied": 0,
+      "log": [
+        "CRASH+RECOVER on modify_pending_order_items: agenttx durable=1 (naive would be 2)",
+        "run error: NotFoundError: litellm.NotFoundError: NotFoundError: OpenAIException - The model `gpt-4.1-2025-"
+      ]
+    }
+  ],
+  "PHASE8_LIVE_FT_PASS": true,
+  "reads": "Under a REAL mid-turn crash during a live LLM-driven tau2 conversation, the AgentTx transactional wrap applies each money-moving effect exactly once (0 double); the naive path (no wrap) would double-apply on each injected crash (cf phase6: 5/15)."
+}

@@ -1,0 +1,9 @@
+{
+  "producer_hard_killed_SIGKILL": true,
+  "durable_restore_in_fresh_process_byte_exact": true,
+  "restored_bytes": 33554432,
+  "restored_blocks": 16,
+  "fail_closed_on_corruption": true,
+  "PHASE8_KV_DURABLE_PASS": true,
+  "honest_scope": "Durable CAS survives SIGKILL + reloads byte-exact + fail-closed in a fresh process (the part the same-process CPU-offload speedups lacked). Injecting these bytes into a NEW vLLM engine's attention to resume decoding is still TARGET; the durable token log is the source of truth (teacher-forced)."
+}
