@@ -1,0 +1,26 @@
+{
+  "transactional_postgres": {
+    "trials": 300,
+    "duplicate": 0,
+    "lost": 0,
+    "exactly_once": true
+  },
+  "overlay_fs": {
+    "trials": 300,
+    "total_receipts": 300,
+    "exactly_once": true
+  },
+  "idempotent_http": {
+    "trials": 300,
+    "service_charge_delta": 300,
+    "exactly_once": true
+  },
+  "irreversible_http": {
+    "trials": 300,
+    "uncertain": 65,
+    "committed": 0,
+    "any_silent_double": false,
+    "fail_closed_never_double": true
+  },
+  "PHASE3_PASS": true
+}

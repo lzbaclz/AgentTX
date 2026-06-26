@@ -145,8 +145,11 @@ class Gateway:
             # durable intent BEFORE the irreversible act; if we crash before 'committed',
             # recovery sees 'prepared' and returns UNCERTAIN (no auto-retry) -- fail closed.
             self._record(key, "prepared", k.value, None)
-            clock.tick()
+            clock.tick()                                  # crash: prepared, no effect -> UNCERTAIN
             res = tool.effect(self, key, args)
+            clock.tick()                                  # crash: effect fired, NOT committed ->
+            #                                               recovery sees 'prepared' -> UNCERTAIN,
+            #                                               and we NEVER re-send (no silent double)
             self._record(key, "committed", k.value, res)
             clock.tick()
             return Result("committed", res, key, k.value)

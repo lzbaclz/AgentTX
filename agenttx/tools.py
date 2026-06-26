@@ -41,3 +41,33 @@ class EmailTool(Tool):                        # IRREVERSIBLE: fail-closed UNCERT
         with open(p, "w") as f:
             f.write(f"to:{args['to']}\n"); f.flush(); os.fsync(f.fileno())
         return p
+
+
+import json as _json
+import urllib.request as _u
+from agenttx.gateway import ToolClass as _TC
+
+
+class HttpIdempotentTool(Tool):       # IDEMPOTENT: pass the action key as the external idempotency key
+    name = "http_charge"
+    klass = _TC.IDEMPOTENT
+
+    def __init__(self, base_url):
+        self.base_url = base_url
+
+    def effect(self, gw, key, args):
+        req = _u.Request(f"{self.base_url}/charge", data=b"{}", method="POST")
+        req.add_header("Idempotency-Key", key)             # action key -> external idempotency key
+        return _json.load(_u.urlopen(req, timeout=5))["result"]
+
+
+class HttpUnsafeTool(Tool):           # IRREVERSIBLE: a non-idempotent external API -> fail-closed
+    name = "http_send_unsafe"
+    klass = _TC.IRREVERSIBLE
+
+    def __init__(self, base_url):
+        self.base_url = base_url
+
+    def effect(self, gw, key, args):
+        req = _u.Request(f"{self.base_url}/send_unsafe", data=b"{}", method="POST")
+        return _json.load(_u.urlopen(req, timeout=5))["result"]
