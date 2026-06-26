@@ -71,36 +71,48 @@ fail-closed `UNCERTAIN` — about the one class where no orchestrator can guaran
   + a **content-addressed block manifest**; restore verifies both and **fails closed** (recompute
   from the durable token log) on any mismatch. A lost snapshot costs only *speed*; a corrupt or
   stale snapshot can *never* produce wrong output.
-- **Output is streamed exactly-once.** Tokens are tagged `(session, turn, seq)`; the client keeps
-  an ACK watermark and dedups, so a mid-stream crash + reroute to another worker re-sends harmless
-  duplicates the client drops — every committed token materializes once, in order, no loss.
+- **Output is streamed exactly-once** *(against worker reroute; PROTOTYPE)*. Tokens tagged
+  `(session, turn, seq)`; the client keeps an ACK watermark and dedups, so a mid-stream crash +
+  reroute re-sends duplicates the client drops. Proven only for a deduplicating client vs reroute —
+  **not** against loss of the output log or coordinator co-death, and today the log/ACK are
+  *in-memory* ([`stream.py`](agenttx/stream.py)), not a durable persist-before-send. Correctness also
+  requires re-sending *logged* tokens (not regenerating — free generation diverges across the
+  KV-reuse boundary).
 
-### Turn invariants (exhaustively model-checked)
+### Turn invariants (abstract model crash-enumerated)
 
-[`agenttx/protocol.py`](agenttx/protocol.py) enumerates a crash after **every** prefix of a turn's
-operations, recovers, and asserts:
+[`agenttx/protocol.py`](agenttx/protocol.py) enumerates a crash after **every** prefix of one
+turn's operations, recovers, and asserts:
 
 - **I1 — Action Uniqueness:** an external effect fires at most once.
 - **I2 — No Ghost Observation:** an observation is recorded only *after* its effect committed.
 - **I3 — No Lost Effect:** a committed effect is eventually observed after recovery.
 - **I5 — Prefix-Consistent Recovery:** a finished turn ends in `TURN_COMMITTED`.
 
-The checker proves the guaranteed classes (transactional + idempotent-overlay) hold for every crash
-point, and that a *raw non-idempotent* effect **cannot** be made exactly-once by any orchestrator —
-which is exactly why that class is fail-closed.
+The checker shows a *raw non-idempotent* effect **cannot** be made exactly-once by any orchestrator —
+which is why that class is fail-closed. *Scope (honest):* this is an **abstract** single-key,
+single-action, sequential model — it omits the `ACTION_PREPARED` window the real coordinator writes,
+and does **not** model concurrency or torn writes (those are tested empirically in
+[`phase7/`](phase7/), not formally). The implementation is verified separately by the crash audits,
+not by this checker; a full TLA+ spec over the real record set + concurrent owners is future work.
 
 ## The Tool-Gateway taxonomy
 
 Every side-effecting tool declares its class; the gateway enforces the matching mechanism
 ([`agenttx/gateway.py`](agenttx/gateway.py)):
 
+"Effectively-once" below = at-most-once *execution* + deduplicated retry; only `TRANSACTIONAL`
+achieves true exactly-once (effect + record in one ACID commit). Distributed-concurrent hard-crash
+evidence today exists only for `TRANSACTIONAL` ([`phase7/`](phase7/)); the others are proven
+single-owner.
+
 | class | guarantee | mechanism |
 |---|---|---|
-| `PURE` | exactly-once (= cache) | read-only; cache result by key |
-| `IDEMPOTENT` | exactly-once | pass the action key as the external **Idempotency-Key** header |
-| `TRANSACTIONAL` | exactly-once | effect **+** action-key record committed in **one** DB transaction |
-| `OVERLAY` | exactly-once | write temp → **atomic rename** to `committed/<key>` (idempotent: same action key → one file) |
-| `COMPENSATABLE` | committed-or-compensated | saga: durable `prepared` → execute → `committed`; recovery of a `prepared`-but-uncommitted action compensates (undo) |
+| `PURE` | effectively-once (= cache) | read-only; cache result by key |
+| `IDEMPOTENT` | effectively-once **(conditional)** | pass the action key as the external **Idempotency-Key** header — *relies on the external service honoring it with a TTL ≥ max recovery latency*; tested against a cooperative mock, not a real API |
+| `TRANSACTIONAL` | **exactly-once** | effect **+** action-key record committed in **one** DB transaction |
+| `OVERLAY` | effectively-once | write temp → **atomic rename** to `committed/<key>` (idempotent: same action key → one file) |
+| `COMPENSATABLE` | committed-or-compensated | saga `prepared → effect_started → committed`; recovery re-runs cleanly from `prepared` (effect not begun) and **compensates only the ambiguous `effect_started`** state. *Logic present in [`gateway.py`](agenttx/gateway.py); no concrete tool / executed crash audit yet — graded **PROTOTYPE**.* |
 | `IRREVERSIBLE` | **fail-closed `UNCERTAIN`** | durable `prepared` before the act; crash in the act/commit window → `UNCERTAIN`, **never** a silent re-send |
 
 > **The honest boundary.** For a truly non-idempotent irreversible external effect (wire money,
@@ -113,32 +125,52 @@ Every side-effecting tool declares its class; the gateway enforces the matching 
 
 ## Results
 
-### Headline
+> Every number below is graded to match [`docs/CLAIM_LEDGER.md`](docs/CLAIM_LEDGER.md). **PROVEN**
+> = real multi-process `os._exit` on Postgres. **MEASURED-PROXY** = real measurement, but of a
+> *proxy* (vLLM's own offload tier / single-owner in-process schedules), not of AgentTx's durable
+> recovery across a worker crash. Do not cite a MEASURED-PROXY figure without its label.
 
-- **120,900 fault injections, 0 correctness violations** — 0 duplicate/lost charge, 0
-  duplicate/lost receipt, **0 ghost observation**, 0 stream-not-exactly-once — including
-  crash-during-recovery and KV-snapshot corruption.
-- **Recovery speedup (KV restore vs transcript re-prefill):** 4.84× @8K, **12.5× @16K, 17× @32K**.
-  The win grows with context (re-prefill ≈ quadratic, restore ≈ linear-bandwidth).
-- **Steady-state durability overhead: 0.7%** of a 100 ms turn (0.70 ms/turn of WAL appends +
-  gateway dedup + fsync'd commits), 0.14% of a 500 ms turn.
-- **Coverage:** 3 tool environments (PostgreSQL / filesystem / HTTP), **2 real baselines**
-  (DBOS 2.25, LangGraph 1.2.6), 2 models (Llama-3.1-8B, Qwen3-8B), fail-closed `UNCERTAIN` for
-  non-idempotent irreversible APIs.
+- **(PROVEN) Distributed exactly-once, real crashes.** 400 turns × 2–6 racing OS processes + hard
+  mid-transaction `os._exit` + recovery sweep on PostgreSQL → **1200/1200 actions exactly-once,
+  0 double, 0 lost** ([`phase7/`](phase7/)). *Scope: the `TRANSACTIONAL` class only* (see open issue
+  below).
+- **(PROVEN) Real-framework failure window.** Same crash (effect fires, framework records *after*):
+  real **DBOS 2.25** duplicates the non-transactional receipt; real **LangGraph 1.2.6** duplicates
+  *both* effects; AgentTx is exactly-once ([`gate1/REAL_BASELINES.md`](gate1/REAL_BASELINES.md)).
+- **(PROVEN) Byte-exact fail-closed KV CAS.** `torch.equal` over 48 MB of real GPU KV bytes; every
+  provenance / checksum mismatch fails closed to recompute ([`phase2/kvview_gpu.py`](phase2/kvview_gpu.py)).
+- **(MEASURED-PROXY) ~100k single-process protocol-model schedules, 0 violations.** Crash via an
+  *in-process exception* (not `os._exit`) at random durable boundaries; oracle finds 0 dup/lost/ghost.
+  A randomized exploration of the protocol state machine, **not** a whole-stack crash-consistency
+  result. (The `os._exit` cross-check is a 500-trial subset.)
+- **(MEASURED-PROXY) KV recovery speedup 4.84× @8K, 12.5× @16K, 17× @32K** — measured as vLLM's own
+  **CPU-offload-tier restore vs cold re-prefill of fresh tokens**, *same process, no worker crash,
+  AgentTx's durable CAS not on the path, snapshot/hash cost excluded*. It bounds the *potential* of
+  KV-as-view, not AgentTx's measured recovery cost (real cross-process restore is `phase8/` TARGET).
+- **(MEASURED-PROXY) Durability bookkeeping 0.70 ms/turn** (≈14.5× a 0.05 ms no-persist baseline, on
+  a `/dev/shm` ramdisk; the KV-snapshot GPU→host copy + per-block sha256 is **not** included). "0.7%"
+  is that 0.70 ms over a *stipulated* 100 ms turn, not a measured end-to-end turn.
+- **(PROVEN) τ²-bench mid-effect crash.** On a constructed mid-refund crash of the one non-atomic
+  retail tool, naive **double-refunds 5/15**, AgentTx **0/15** ([`phase6/`](phase6/)). On the *full*
+  τ²-retail benchmark the tools self-guard, so there is **no gap** (`PHASE6_PASS=false`,
+  naive double-charged 0) — both facts stated, neither hidden.
+- **Coverage:** 3 tool environments (PostgreSQL / filesystem / HTTP), 2 real baselines (DBOS 2.25,
+  LangGraph 1.2.6), 2 models (Llama-3.1-8B, Qwen3-8B), fail-closed `UNCERTAIN` for non-idempotent
+  irreversible APIs.
 
-### Strong-gate scorecard ([`phase5/results/summary.json`](phase5/results/summary.json))
+### Scorecard ([`phase5/results/summary.json`](phase5/results/summary.json), graded)
 
-| bar | target | result |
+| bar | result | grade & crash model |
 |---|---|---|
-| dup/lost on supported tools | 0 | **0** (across 120,900 fault injections) |
-| ghost observations | 0 | **0** |
-| steady-state overhead | ≤ 5% | **0.7%** |
-| recovery speedup | ≥ 5× | **12.5–17× @16–32K** (4.84× @8K) |
-| fault injections | ≥ 100k | **120,900** |
-| tool environments | ≥ 3 | **3** (PostgreSQL / filesystem / HTTP) |
-| real frameworks compared | ≥ 2 | **2** (DBOS 2.25 + LangGraph 1.2.6, both real) |
-| models | ≥ 2 | **2** (Llama-3.1-8B + Qwen3-8B) |
-| irreversible API | fail-closed | **`UNCERTAIN`**, never silent double |
+| distributed exactly-once (Tx class) | **1200/1200 actions, 0 dup/lost** | **PROVEN** — real multi-process `os._exit`, Postgres ([`phase7/`](phase7/)) |
+| dup/lost/ghost, single-owner protocol | **0** | **MEASURED-PROXY** — ~100k in-process schedules + 500 `os._exit` xcheck |
+| ghost observations | **0** | MEASURED-PROXY (single-owner) |
+| recovery speedup | **12.5–17× @16–32K** (4.84× @8K) | **MEASURED-PROXY** — vLLM offload-tier restore vs cold re-prefill, no worker crash |
+| durability bookkeeping | **0.70 ms/turn** (≈14.5× no-persist; "0.7%" of a stipulated 100 ms turn) | MEASURED-PROXY — ramdisk, KV-snapshot cost excluded |
+| tool environments | **3** (PostgreSQL / filesystem / HTTP) | — |
+| real frameworks compared | **2** (DBOS 2.25 + LangGraph 1.2.6) | PROVEN failure-window |
+| models | **2** (Llama-3.1-8B + Qwen3-8B) | — |
+| irreversible API | **`UNCERTAIN`**, never silent double | PROVEN (fail-closed) |
 
 ### Baselines, head-to-head (same crash: effect fires, framework crashes before recording it)
 
@@ -148,12 +180,14 @@ Every side-effecting tool declares its class; the gateway enforces the matching 
 | real LangGraph | 1.2.6 (PostgresSaver) | **2 (DUPLICATED)** | **2 (DUPLICATED)** |
 | **AgentTx** | — | **1 (exactly-once)** | **1 (exactly-once)** |
 
-(AgentTx verified over 10,000 random crashes including crash-during-recovery;
-[`gate1/REAL_BASELINES.md`](gate1/REAL_BASELINES.md).)
+Caveat: the baselines are the *naked* DBOS/LangGraph configs — a uuid-named file write inside a
+non-transactional step. AgentTx's fix (content-address by `action_key`) ports into a DBOS step, so
+this shows a default-config gap, not a fundamental one; DBOS+idempotency-key / +outbox and
+Atomix/Cordon are **not yet** measured ([`docs/GATE0_REOPEN.md`](docs/GATE0_REOPEN.md)).
 
 ---
 
-## How it was built — the death gate, then five phases
+## How it was built — the death gate, then eight phases
 
 AgentTx was developed *falsify-before-invest*: a cheap, decisive **death gate** had to pass before
 committing to the full system.
@@ -162,20 +196,23 @@ committing to the full system.
 
 | gate | question | result |
 |---|---|---|
-| **Gate 0** | Does *any* system bundle turn-atomicity across {LLM/KV, workflow, tool effect, output}? | **No** — DBOS owns only transactional exactly-once; KV-recovery systems ignore tool effects ([`gate0/`](gate0/GATE0_NOVELTY.md)) |
+| **Gate 0** | Does *any* system bundle turn-atomicity across {LLM/KV, workflow, tool effect, output}? | **Reopened** — DBOS owns only transactional exactly-once and KV-recovery systems ignore tool effects, *but* **Atomix/Cordon precede us on transactional tool use**, so the novelty narrows to the **cross-plane recovery contract**, not "first agent transaction" ([`docs/GATE0_REOPEN.md`](docs/GATE0_REOPEN.md)) |
 | **Gate 1a** | Does the strong baseline have a *real* correctness gap? | **Yes** — DBOS duplicates non-transactional effects at the crash window ([`gate1/`](gate1/)) |
-| **Gate 1b** | Is KV-as-materialized-view a *real* recovery win? | **Yes** — restore vs re-prefill **1.8× @4K, 12.5× @16K, 17× @32K** |
-| **Gate 2** | Does a minimal AgentTx deliver end-to-end? | **Yes** — 10k crashes 0 dup/lost, **7.8×** recovery @16K, **0.7%** overhead ([`gate2/`](gate2/GATE2_VERDICT.md)) |
+| **Gate 1b** | Is KV-as-materialized-view a *real* recovery win? | **Yes (MEASURED-PROXY)** — offload-tier restore vs cold re-prefill **1.8× @4K, 12.5× @16K, 17× @32K** (no worker crash on the measured path) |
+| **Gate 2** | Does a minimal AgentTx deliver end-to-end? | **Yes** — 10k *in-process* crashes 0 dup/lost (+500 `os._exit` xcheck), 7.8× proxy recovery @16K, 0.70 ms/turn bookkeeping ([`gate2/`](gate2/GATE2_VERDICT.md)) |
 
-### Phases 1–5 — the full system
+### Phases 1–8
 
-| phase | component | evidence |
+| phase | component | evidence (grade) |
 |---|---|---|
-| **1** | Postgres WAL + Tool-Gateway taxonomy + **real DBOS & LangGraph baselines** | real DBOS 2.25 / LangGraph 1.2.6 duplicate vs AgentTx exactly-once ([`gate1/REAL_BASELINES.md`](gate1/REAL_BASELINES.md)) |
-| **2** | vLLM **KV-View** (provenance fingerprint + content-addressed CAS + checksum + fail-closed) | byte-exact `torch.equal` over 48 MB of real GPU KV bytes; every fail-closed path; 3.37× e2e @8K ([`phase2/`](phase2/PHASE2_KVVIEW.md)) |
-| **3** | **3 exactly-once tool classes** (Postgres tx / FS overlay / HTTP idempotency proxy) + the fail-closed `IRREVERSIBLE` class | 300 crashes/class → exactly-once; non-idempotent API → 65 `UNCERTAIN`, 0 silent double ([`phase3/`](phase3/PHASE3_GATEWAY.md)) |
-| **4** | **streaming exactly-once** + multi-worker reroute | 20,000 turns 100% exactly-once, 45,531 re-sends deduped, avg 2.66 workers/turn; real-HTTP cross-check ([`phase4/`](phase4/PHASE4_STREAMING.md)) |
-| **5** | **end-to-end eval** | **120,900 fault injections, 0 violations**; 2 models; strong-gate scorecard ([`phase5/`](phase5/PHASE5_EVAL.md)) |
+| **1** | Postgres WAL + Tool-Gateway taxonomy + **real DBOS & LangGraph baselines** | DBOS 2.25 / LangGraph 1.2.6 duplicate vs AgentTx exactly-once — **PROVEN** ([`gate1/REAL_BASELINES.md`](gate1/REAL_BASELINES.md)) |
+| **2** | vLLM **KV-View** (provenance fingerprint + content-addressed CAS + checksum + fail-closed) | byte-exact `torch.equal` over 48 MB real GPU KV — **PROVEN**; 3.37× e2e @8K — **MEASURED-PROXY** ([`phase2/`](phase2/PHASE2_KVVIEW.md)) |
+| **3** | **3 exactly-once tool classes** (Postgres tx / FS overlay / HTTP idempotency proxy) + fail-closed `IRREVERSIBLE` | 300 crashes/class → exactly-once; 65 `UNCERTAIN`, 0 silent double — single-owner ([`phase3/`](phase3/PHASE3_GATEWAY.md)) |
+| **4** | **streaming exactly-once** + multi-worker reroute | 20k turns exactly-once vs worker reroute — **PROTOTYPE** (in-memory log/ACK, not durable persist-before-send) ([`phase4/`](phase4/PHASE4_STREAMING.md)) |
+| **5** | end-to-end correctness eval | ~100k single-process schedules, 0 violations — **MEASURED-PROXY** ([`phase5/`](phase5/PHASE5_EVAL.md)) |
+| **6** | AgentTx on the **real τ²-bench** retail environment | constructed mid-refund crash: naive 5/15 double, AgentTx 0/15; full bench self-guards (no gap) — **PROVEN/honest** ([`phase6/`](phase6/)) |
+| **7** | **distributed turn-recovery protocol** (ordinal identity, atomic claim, owner-epoch fencing) | 1200/1200 actions exactly-once under real multi-process `os._exit`, Postgres — **PROVEN (Tx class)** ([`phase7/`](phase7/)) |
+| **8** | live-orchestrator FT + durable cross-process KV — **down-payments** | partial; real cross-process KV restore into a fresh vLLM worker is **TARGET, not done** ([`phase8/`](phase8/)) |
 
 ---
 
@@ -198,14 +235,22 @@ agenttx/
   stream.py       # streaming exactly-once: StreamLog + StreamClient ACK watermark + multi-worker resume
 
 adapters/         # REAL DBOS 2.25 and LangGraph 1.2.6 baselines (Postgres), audited under the same crash
-gate0/            # novelty kill-check (capability matrix, web-verified)
+gate0/            # novelty kill-check (capability matrix) — see also docs/GATE0_REOPEN.md
 gate1/            # 1a failure-window correctness audit + 1b recovery-cost gap + real baselines
 gate2/            # minimal end-to-end AgentTx: 10k fault audit, real-LLM e2e, overhead
-phase2..5/        # KV-View / Tool Gateway / streaming / end-to-end eval — each with results/*.json
-docs/             # GATE_VERDICT.md
+phase2../phase5/  # KV-View / Tool Gateway / streaming / end-to-end eval — each with results/*.json
+phase6/           # AgentTx on the real τ²-bench retail environment
+phase7/           # distributed turn-recovery protocol (dtx.py, concurrent_gate.py) — real multi-process os._exit
+phase8/           # live-orchestrator FT + durable cross-process KV — down-payments (TARGET work)
+docs/             # CLAIM_LEDGER.md (every claim graded) · GATE0_REOPEN.md (Atomix/Cordon prior art) · GATE_VERDICT.md
 scripts/          # pg_start.sh (Postgres bring-up; data dir lives OUTSIDE the repo)
 RESULTS.md        # the one-page evidence map
 ```
+
+> **Two action-identity schemes exist:** `gateway.py` keys effects by `H(session,turn,tool,args)`
+> (single-owner audits); the distributed protocol in `phase7/dtx.py` uses an **ordinal** action
+> identity + content-fingerprint check. The rigorously crash-tested path is the latter; reconciling
+> the two into one is open work.
 
 ### Recovery, end to end
 
@@ -215,6 +260,10 @@ On a crash the coordinator re-runs the turn. (1) The KV-View decides the KV path
 gateway's action-key dedup makes every supported effect exactly-once. (3) A fresh worker resumes
 the output stream from the ACK watermark. **Correctness never depends on the KV snapshot** — it only
 accelerates recovery.
+
+> This is the *target* recovery contract. What is proven end-to-end today vs. modeled single-owner
+> vs. not-yet-built is enumerated in **[Open issues](#open-issues-what-is-not-yet-proven--see-docsclaim_ledgermd)**
+> and the ledger — e.g. step (3) is an in-memory prototype, and step (1)'s cross-process restore is TARGET.
 
 ---
 
@@ -266,15 +315,31 @@ is the one-page map from claim → file.
 
 ---
 
-## Honest scope (carried to camera-ready)
+## Open issues (what is *not* yet proven — see [`docs/CLAIM_LEDGER.md`](docs/CLAIM_LEDGER.md))
 
-- **Benchmark task-success.** The agent loop drives a real LLM (real generation + real KV) with a
-  fixed action plan; wiring full SWE-bench / BFCL / Agent-Diff tool environments for end-to-end
-  task-success is the remaining eval breadth.
-- **A second hardware / topology** (results are on dual A100 today).
-- **Live offload-tier per-block checksums** in the engine path — the byte-level content-addressed
-  CAS is already proven on real GPU KV bytes ([`phase2/kvview_gpu.py`](phase2/kvview_gpu.py));
-  productionizing wires those checksums into the live offload tier, plus SSD/remote snapshot tiers
-  and GC of unreferenced blocks.
-- **Irreversible non-idempotent APIs are not claimed exactly-once** — by design they are fail-closed
-  `UNCERTAIN`. This is a provable boundary, not a missing feature.
+Ordered by how load-bearing they are to the headline claims:
+
+1. **Distributed hard-crash evidence covers only the `TRANSACTIONAL` class** — which is DBOS's
+   existing mechanism. The novel classes (OVERLAY/IDEMPOTENT/COMPENSATABLE) are proven only
+   single-owner/in-process. *Fix: harden ≥1 non-transactional class under the `phase7/` multi-process gate.*
+2. **The recovery-speedup is a proxy.** It measures vLLM's offload-tier restore vs cold re-prefill of
+   *fresh* tokens, in one process, with no worker crash and AgentTx's CAS off the path; snapshot/hash
+   cost is excluded. *Fix: honest baseline = replay the identical context with prefix caching; then
+   implement real cross-process restore (SIGKILL → fresh vLLM → load CAS → resume) and account for snapshot cost.*
+3. **`COMPENSATABLE` has logic but no executed test** and no concrete tool. *Fix: implement a real
+   compensatable tool + run it through the `phase3/` hard-crash matrix, or grade it TARGET.*
+4. **The streaming/output plane is in-memory**, not a durable persist-before-send log; no
+   coordinator+stream-worker co-death test. *Fix: durable output WAL + co-death recovery test.*
+5. **Crash fidelity & statistics.** ~99.6% of the "fault injections" are in-process exceptions on a
+   live DB connection (graceful abort), single RNG seed, no CIs, no torn-write/fsync-fault test.
+   *Fix: re-run a meaningful fraction under `os._exit`, multiple seeds + Clopper-Pearson bounds, add a torn-WAL test.*
+6. **Baseline fairness.** Only naked DBOS/LangGraph are compared; DBOS+idempotency-key / +outbox and
+   Atomix/Cordon are unmeasured. *Fix: add the recommended configs and a characterized prior-art comparison.*
+7. **Determinism / "correct output on recovery"** is asserted via teacher-forcing but never measured
+   on a GPU path; provenance fingerprint stubs LoRA/RoPE. *Fix: measure teacher-forced post-recovery
+   token-id equality; pull real adapter/RoPE config + fail-closed unit tests.*
+8. **No real agent-task success** (fixed scripted plan, no SWE-bench/BFCL), and **no `requirements.txt`
+   / Dockerfile / env-var paths** — reproduction needs hardcoded absolute paths today.
+
+**Irreversible non-idempotent APIs are intentionally `UNCERTAIN`** (fail-closed) — a provable
+boundary, not a gap.
