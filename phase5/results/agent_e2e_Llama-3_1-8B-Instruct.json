@@ -1,0 +1,12 @@
+{
+  "model": "/public/model_zoo/Llama-3.1-8B-Instruct",
+  "ctx": 8192,
+  "tool_charge_exactly_once": true,
+  "tool_http_exactly_once": true,
+  "kv_restored": true,
+  "kv_restore_ms": 151.3,
+  "reprefill_ms": 731.9,
+  "recovery_speedup": 4.84,
+  "stream_exactly_once": true,
+  "PART_B_PASS": true
+}

@@ -1,0 +1,12 @@
+{
+  "model": "/public/model_zoo/Qwen3-8B",
+  "ctx": 8192,
+  "tool_charge_exactly_once": true,
+  "tool_http_exactly_once": true,
+  "kv_restored": true,
+  "kv_restore_ms": 209.0,
+  "reprefill_ms": 791.3,
+  "recovery_speedup": 3.79,
+  "stream_exactly_once": true,
+  "PART_B_PASS": true
+}

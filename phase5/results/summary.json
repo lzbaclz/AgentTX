@@ -1,0 +1,61 @@
+{
+  "CORRECTNESS": {
+    "total_fault_injections": 120900,
+    "phase5_100k_full_stack": {
+      "trials": 100000,
+      "violations": {
+        "dup_charge": 0,
+        "lost_charge": 0,
+        "dup_receipt": 0,
+        "lost_receipt": 0,
+        "ghost_observation": 0,
+        "stream_not_exactly_once": 0
+      },
+      "pass": true
+    },
+    "phase4_streaming": {
+      "trials": 20000,
+      "exactly_once": 20000,
+      "resends_deduped": 45531
+    },
+    "phase3_gateway_3_classes": {
+      "per_class_trials": 300,
+      "exactly_once": true,
+      "irreversible_uncertain": 65
+    },
+    "zero_dup_lost_ghost": true
+  },
+  "PERFORMANCE": {
+    "recovery_speedup_kv_restore_vs_reprefill": {
+      "/public/model_zoo/Qwen3-8B": 3.79,
+      "/public/model_zoo/Llama-3.1-8B-Instruct": 4.84
+    },
+    "phase2_e2e_speedup": 3.37,
+    "bookkeeping_overhead": "0.70 ms/turn = 0.7% of a 100ms turn (Gate-2c)"
+  },
+  "COVERAGE": {
+    "tool_environments": [
+      "PostgreSQL(tx)",
+      "filesystem(overlay)",
+      "HTTP(idempotency proxy)"
+    ],
+    "real_baselines": [
+      "DBOS 2.25 (real)",
+      "LangGraph 1.2.6 + PostgresSaver (real)"
+    ],
+    "models": [
+      "/public/model_zoo/Qwen3-8B",
+      "/public/model_zoo/Llama-3.1-8B-Instruct"
+    ],
+    "fail_closed_class": "non-idempotent irreversible API -> UNCERTAIN"
+  },
+  "STRONG_GATE": {
+    "zero_dup_lost_on_supported_tools": true,
+    "overhead_le_5pct": true,
+    "recovery_speedup_ge_5x": null,
+    "fault_injections_ge_100k": true,
+    "tool_envs_ge_3": true,
+    "frameworks_ge_2": true,
+    "models_ge_2": true
+  }
+}

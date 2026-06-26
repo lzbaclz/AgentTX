@@ -1,0 +1,18 @@
+{
+  "trials": 100000,
+  "mode_counts": {
+    "recovery_crash": 19991,
+    "crash": 60044,
+    "kv_corrupt": 19965
+  },
+  "violations": {
+    "dup_charge": 0,
+    "lost_charge": 0,
+    "dup_receipt": 0,
+    "lost_receipt": 0,
+    "ghost_observation": 0,
+    "stream_not_exactly_once": 0
+  },
+  "PHASE5_CORRECTNESS_PASS": true,
+  "reads": "Whole AgentTx stack (WAL + 3-class gateway + KV-View + streaming) under the full fault matrix (crash anywhere, crash-during-recovery, KV-snapshot corruption). Per trial: SQL charge exactly-once, FS receipt exactly-once, no ghost observation, client output exactly-once/in-order. KV corruption -> fail-closed -> output still correct (durable token log is the source of truth)."
+}
