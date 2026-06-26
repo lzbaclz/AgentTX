@@ -18,17 +18,21 @@ and no duplicated/lost client tokens.
 ## System (Phases 1–5)
 | phase | component | evidence |
 |---|---|---|
-| 1 | Postgres WAL + Tool Gateway 6-class taxonomy + **real DBOS & LangGraph baselines** | real DBOS 2.25 dup / real LangGraph 1.2.6 dup vs AgentTx exactly-once (`gate1/REAL_BASELINES.md`) |
+| 1 | Postgres WAL + Tool Gateway 6-class taxonomy (4 exactly-once: PURE/IDEMPOTENT/TRANSACTIONAL/OVERLAY; 1 committed-or-compensated: COMPENSATABLE; 1 fail-closed-UNCERTAIN: IRREVERSIBLE) + **real DBOS & LangGraph baselines** | real DBOS 2.25.0 (charges 1 / receipts 2) / real LangGraph 1.2.6 (2/2 dup) vs AgentTx exactly-once verified in gate1a (40/40 both effects) + Phase 3/5 (`gate1/REAL_BASELINES.md`) |
 | 2 | vLLM KV-View (provenance + content-addressed CAS + checksum + fail-closed) | byte-exact `torch.equal` (48 MB); every fail-closed path; 3.37x e2e (`phase2/`) |
 | 3 | 3 real tool classes (Postgres tx / FS overlay / HTTP idempotency proxy) + fail-closed | 300 crashes/class -> exactly-once; non-idempotent API -> UNCERTAIN (`phase3/`) |
 | 4 | streaming exactly-once + multi-worker reroute | 20k turns 100% exactly-once, 45k re-sends deduped; real-HTTP cross-check (`phase4/`) |
-| 5 | end-to-end eval | **120,900 fault injections, 0 violations**; 2 models; strong-gate scorecard (`phase5/`) |
+| 5 | end-to-end eval | **100,000 full-stack fault injections, 0 violations** (120,900 grand total w/ Phase 3+4); 2 models; strong-gate scorecard (`phase5/`) |
 
 ## Headline numbers
-- **120,900 fault injections, 0 correctness violations** (0 dup/lost/ghost, 0 stream violations),
-  including crash-during-recovery and KV-snapshot corruption.
-- Recovery via KV-as-materialized-view: **4.84x @8K, 12.5x @16K, 17x @32K** vs transcript re-prefill.
-- Steady-state durability overhead: **0.7%** of a 100 ms turn.
+- **Phase-5 full-stack sweep: 100,000 fault injections, 0 correctness violations** (0 dup/lost/ghost,
+  0 stream violations), including crash-during-recovery (19,991) and KV-snapshot corruption (19,965).
+  Grand total of crash-injection trials across the whole eval = **120,900** (100,000 full-stack +
+  20,000 streaming + 900 gateway), all 0 violations.
+- Recovery via KV-as-materialized-view (context-dependent, KV restore vs transcript re-prefill):
+  **1.82x @4K, 12.45x @16K, 16.97x @32K** (Gate-1b, Llama-3.1-8B); **7.81x @16K** (Gate-2b e2e);
+  **4.84x (Llama) / 3.79x (Qwen) @8K** (Phase-5 e2e).
+- Steady-state durability overhead: **0.70 ms/turn (~0.7% of a 100 ms turn)**.
 - Coverage: 3 tool environments, **2 real baselines (DBOS, LangGraph)**, 2 models (Llama-3.1-8B,
   Qwen3-8B), fail-closed `UNCERTAIN` for non-idempotent irreversible APIs.
 
