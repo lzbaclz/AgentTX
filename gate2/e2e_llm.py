@@ -108,7 +108,14 @@ def main():
     _, ttft_reprefill = llm_step(fresh)
 
     out = {"model": MODEL, "ctx_tokens": CTX,
-           "tool_exactly_once_across_crash": (nc_before == 1 and nc_after == 1 and nr == 0 or nr <= 1),
+           # FIXED (advisor): the old expression `a and b and c or nr<=1` was True whenever nr<=1
+           # regardless of the charge counts (precedence bug). Exactly-once = exactly one charge
+           # before AND after recovery, and no extra receipt.
+           "tool_exactly_once_across_crash": (nc_before == 1 and nc_after == 1 and nr <= 1),
+           # NOTE: this is a SAME-PROCESS recovery-path check -- the "crash" is `del coord`, so the
+           # vLLM engine / CUDA context / CPU-offload tier all survive. A real cross-process worker
+           # crash + durable KV reload is phase8 (kv_durable). Do not read this as a worker crash.
+           "crash_model": "same-process (del coord); vLLM/CUDA/offload survive -- NOT a worker crash",
            "charge_count_before_crash": nc_before, "charge_count_after_recovery": nc_after,
            "kv_restored_GB": round(rg, 3), "kv_restore_fired": rg > 0.05,
            "recover_via_restore_ms": round(ttft_restore, 1),

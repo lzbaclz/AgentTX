@@ -10,7 +10,11 @@ mechanism. The taxonomy is honest about what is achievable:
   IDEMPOTENT     exactly-once                    pass action key as the external idempotency key
   TRANSACTIONAL  exactly-once                    effect + key-record committed in ONE db tx
   OVERLAY        exactly-once                    write temp -> atomic rename to committed/<key>
-  COMPENSATABLE  committed-or-compensated        saga: execute + compensation log; undo on abort
+  COMPENSATABLE  committed-or-compensated        saga w/ states prepared -> effect_started ->
+                                                 committed: a crash at 'prepared' (effect not yet
+                                                 begun) re-runs cleanly; only 'effect_started'
+                                                 (ambiguous) triggers IDEMPOTENT compensation +
+                                                 a durable receipt -- never compensate a non-effect
   IRREVERSIBLE   fail-closed UNCERTAIN           durable 'prepared' before execute; on a crash in
                                                  the prepared->committed window, recovery returns
                                                  UNCERTAIN and does NOT auto-retry
@@ -110,12 +114,19 @@ class Gateway:
             st, res = seen
             if st == "committed":
                 return Result("dedup_hit", res, key, tool.klass.value)
-            if st == "prepared" and tool.klass == ToolClass.IRREVERSIBLE:
-                return Result("uncertain", None, key, tool.klass.value)   # FAIL CLOSED
-            if st == "prepared" and tool.klass == ToolClass.COMPENSATABLE:
-                tool.compensate(self, key, args)
-                self._record(key, "compensated", tool.klass.value, None)
+            if st == "compensated":
                 return Result("compensated", None, key, tool.klass.value)
+            if tool.klass == ToolClass.IRREVERSIBLE and st in ("prepared", "effect_started"):
+                return Result("uncertain", None, key, tool.klass.value)   # FAIL CLOSED
+            if tool.klass == ToolClass.COMPENSATABLE:
+                # 'prepared' means the effect had NOT started yet (recorded before effect_started)
+                # -> safe to re-run; do NOT compensate a non-existent effect (the advisor's bug).
+                # 'effect_started' is the only ambiguous state -> idempotent compensation + receipt.
+                if st == "effect_started":
+                    tool.compensate(self, key, args)
+                    self._record(key, "compensated", tool.klass.value, None)
+                    return Result("compensated", None, key, tool.klass.value)
+                # st == "prepared": fall through and re-run from a clean state
 
         k = tool.klass
         if k == ToolClass.TRANSACTIONAL:
@@ -134,11 +145,13 @@ class Gateway:
             return Result("committed", res, key, k.value)
 
         if k == ToolClass.COMPENSATABLE:
-            self._record(key, "prepared", k.value, None)
-            clock.tick()
-            res = tool.effect(self, key, args)
+            self._record(key, "prepared", k.value, None)        # intent only, effect not yet attempted
+            clock.tick()                                        # crash@prepared -> recovery re-runs cleanly
+            self._record(key, "effect_started", k.value, None)  # about to run the (non-idempotent) effect
+            clock.tick()                                        # crash@effect_started -> ambiguous ->
+            res = tool.effect(self, key, args)                  #   recovery compensates idempotently
             self._record(key, "committed", k.value, res)
-            clock.tick()
+            clock.tick()                                        # crash@committed -> dedup
             return Result("committed", res, key, k.value)
 
         if k == ToolClass.IRREVERSIBLE:
