@@ -1,0 +1,8 @@
+{
+  "tokens": 60,
+  "received": 60,
+  "workers_used": 3,
+  "resends_deduped": 0,
+  "exactly_once_in_order": true,
+  "PHASE4_REALSOCKET_PASS": true
+}

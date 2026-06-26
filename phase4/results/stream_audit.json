@@ -1,0 +1,15 @@
+{
+  "trials": 20000,
+  "exactly_once_in_order_no_loss": 20000,
+  "violations": {
+    "loss": 0,
+    "duplicate_in_received": 0,
+    "out_of_order": 0,
+    "not_completed": 0
+  },
+  "avg_workers_per_turn": 2.663,
+  "max_workers_in_a_turn": 10,
+  "total_network_resends_deduped": 45531,
+  "PHASE4_PASS": true,
+  "reads": "Every committed token reaches the client exactly once, in order, with no loss, across random mid-stream worker crashes, multi-worker reroutes, and stale-ACK re-sends. Re-sent (duplicate) tokens are deduped by the client's seq watermark; crashes reroute to a fresh worker that resumes from the durable log + the client ACK."
+}
