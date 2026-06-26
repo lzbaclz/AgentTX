@@ -1,0 +1,8 @@
+{
+  "P1_identity_two_identical_calls_both_execute": true,
+  "P2_claim_dedup_replay_no_double": true,
+  "P3_fencing_stale_owner_rejected": true,
+  "P4_crash_before_commit_rolls_back_then_exactly_once": true,
+  "P5_wal_self_contained_recovery_no_external_plan": true,
+  "PROTOCOL_PROPS_PASS": true
+}
