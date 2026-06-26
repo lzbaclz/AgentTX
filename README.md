@@ -21,9 +21,16 @@
 **A single agent *turn* — the LLM generation, the conversation/KV state, the tool side-effects,
 and the streamed client output — is one cross-layer transaction.** A **durable turn log** is the
 single source of truth; the **KV cache is a materialized view** of that log (rebuildable,
-fail-closed-verified). The goal: after any component crashes, recover the agent to a single
-**committed turn prefix** — no duplicate effects, no lost effects, no ghost observations, no
+fail-closed-verified). **The target contract:** after any component crashes, recover the agent to a
+single **committed turn prefix** — no duplicate effects, no lost effects, no ghost observations, no
 duplicated/lost client tokens.
+
+**What is PROVEN today vs. target.** This contract is proven for the **transactional tool class
+under real multi-process crashes** (`phase7/`: 1200/1200 actions, 0 double/lost) and for the
+**OVERLAY (filesystem) class** (`phase7/overlay_gate.py`, below). The other non-transactional
+classes are proven single-owner; durable cross-process KV recovery and a durable output log are
+**TARGET** — see the status box above and [`docs/CLAIM_LEDGER.md`](docs/CLAIM_LEDGER.md). AgentTx is
+a **prototype + evidence package**, not a finished runtime.
 
 > **Headline (PROVEN):** the distributed turn-recovery protocol survives **400 turns × 2–6 real
 > racing OS processes + hard mid-transaction `os._exit` + recovery sweep on PostgreSQL** with
@@ -130,10 +137,13 @@ single-owner.
 > *proxy* (vLLM's own offload tier / single-owner in-process schedules), not of AgentTx's durable
 > recovery across a worker crash. Do not cite a MEASURED-PROXY figure without its label.
 
-- **(PROVEN) Distributed exactly-once, real crashes.** 400 turns × 2–6 racing OS processes + hard
-  mid-transaction `os._exit` + recovery sweep on PostgreSQL → **1200/1200 actions exactly-once,
-  0 double, 0 lost** ([`phase7/`](phase7/)). *Scope: the `TRANSACTIONAL` class only* (see open issue
-  below).
+- **(PROVEN) Distributed exactly-once, real crashes — two classes.** 400 turns × 2–6 racing OS
+  processes + hard `os._exit` + recovery sweep on PostgreSQL: the **`TRANSACTIONAL`** class
+  ([`phase7/concurrent_gate.py`](phase7/concurrent_gate.py): 1200/1200 actions, 0 double/lost) **and**
+  the non-transactional **`OVERLAY`** filesystem class ([`phase7/overlay_gate.py`](phase7/overlay_gate.py):
+  1200/1200 committed files, 0 duplicate, 0 lost, 0 tmp-promoted, legit-duplicate ordinals both
+  execute), with hard death at both the after-write and after-publish windows. (`IDEMPOTENT` /
+  `COMPENSATABLE` distributed hardening is still open.)
 - **(PROVEN) Real-framework failure window.** Same crash (effect fires, framework records *after*):
   real **DBOS 2.25** duplicates the non-transactional receipt; real **LangGraph 1.2.6** duplicates
   *both* effects; AgentTx is exactly-once ([`gate1/REAL_BASELINES.md`](gate1/REAL_BASELINES.md)).
@@ -162,7 +172,8 @@ single-owner.
 
 | bar | result | grade & crash model |
 |---|---|---|
-| distributed exactly-once (Tx class) | **1200/1200 actions, 0 dup/lost** | **PROVEN** — real multi-process `os._exit`, Postgres ([`phase7/`](phase7/)) |
+| distributed exactly-once (Tx class) | **1200/1200 actions, 0 dup/lost** | **PROVEN** — real multi-process `os._exit`, Postgres ([`phase7/concurrent_gate.py`](phase7/concurrent_gate.py)) |
+| distributed exactly-once (OVERLAY class) | **1200/1200 files, 0 dup/lost/promoted** | **PROVEN** — real multi-process `os._exit` (after-write + after-publish) ([`phase7/overlay_gate.py`](phase7/overlay_gate.py)) |
 | dup/lost/ghost, single-owner protocol | **0** | **MEASURED-PROXY** — ~100k in-process schedules + 500 `os._exit` xcheck |
 | ghost observations | **0** | MEASURED-PROXY (single-owner) |
 | recovery speedup | **12.5–17× @16–32K** (4.84× @8K) | **MEASURED-PROXY** — vLLM offload-tier restore vs cold re-prefill, no worker crash |
@@ -211,7 +222,7 @@ committing to the full system.
 | **4** | **streaming exactly-once** + multi-worker reroute | 20k turns exactly-once vs worker reroute — **PROTOTYPE** (in-memory log/ACK, not durable persist-before-send) ([`phase4/`](phase4/PHASE4_STREAMING.md)) |
 | **5** | end-to-end correctness eval | ~100k single-process schedules, 0 violations — **MEASURED-PROXY** ([`phase5/`](phase5/PHASE5_EVAL.md)) |
 | **6** | AgentTx on the **real τ²-bench** retail environment | constructed mid-refund crash: naive 5/15 double, AgentTx 0/15; full bench self-guards (no gap) — **PROVEN/honest** ([`phase6/`](phase6/)) |
-| **7** | **distributed turn-recovery protocol** (ordinal identity, atomic claim, owner-epoch fencing) | 1200/1200 actions exactly-once under real multi-process `os._exit`, Postgres — **PROVEN (Tx class)** ([`phase7/`](phase7/)) |
+| **7** | **distributed turn-recovery protocol** (ordinal identity, atomic claim, owner-epoch fencing) | TRANSACTIONAL **and** OVERLAY classes exactly-once under real multi-process `os._exit`, Postgres — 1200/1200 each — **PROVEN** ([`phase7/`](phase7/)) |
 | **8** | live-orchestrator FT + durable cross-process KV — **down-payments** | partial; real cross-process KV restore into a fresh vLLM worker is **TARGET, not done** ([`phase8/`](phase8/)) |
 
 ---
@@ -319,9 +330,10 @@ is the one-page map from claim → file.
 
 Ordered by how load-bearing they are to the headline claims:
 
-1. **Distributed hard-crash evidence covers only the `TRANSACTIONAL` class** — which is DBOS's
-   existing mechanism. The novel classes (OVERLAY/IDEMPOTENT/COMPENSATABLE) are proven only
-   single-owner/in-process. *Fix: harden ≥1 non-transactional class under the `phase7/` multi-process gate.*
+1. **Distributed hard-crash evidence now covers `TRANSACTIONAL` + `OVERLAY`** (the latter a novel
+   non-transactional class, [`phase7/overlay_gate.py`](phase7/overlay_gate.py)). Still single-owner
+   only: **`IDEMPOTENT`** and **`COMPENSATABLE`**. *Fix: harden `IDEMPOTENT` under the `phase7/`
+   multi-process gate (needs a durable external idempotency store); give `COMPENSATABLE` a concrete tool + audit.*
 2. **The recovery-speedup is a proxy.** It measures vLLM's offload-tier restore vs cold re-prefill of
    *fresh* tokens, in one process, with no worker crash and AgentTx's CAS off the path; snapshot/hash
    cost is excluded. *Fix: honest baseline = replay the identical context with prefix caching; then

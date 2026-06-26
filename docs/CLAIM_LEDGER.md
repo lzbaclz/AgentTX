@@ -12,9 +12,10 @@ Every claim in this repo, graded against its evidence. Written after an adversar
 | claim | evidence |
 |---|---|
 | Real **DBOS 2.25.0** and **LangGraph 1.2.6** do NOT make non-transactional effects exactly-once (DBOS charges 1 / receipts 2; LangGraph 2/2) | `gate1/REAL_BASELINES.md`, `gate1/results/real_*.json` |
-| **Distributed turn-recovery protocol**: action-ordinal identity, atomic claim (`action_id` PK + `ON CONFLICT DO NOTHING` in the effect tx), owner-epoch fencing, WAL-as-source-of-truth — exactly-once under REAL multi-process concurrency + hard mid-tx `os._exit` + recovery sweep | `phase7/concurrent_gate.py` (400 turns × 2–6 racing OS processes → 1200/1200 actions, 0 double, 0 lost), `phase7/protocol_props.py` (P1–P5) |
-| Tool Gateway taxonomy (4 exactly-once / 1 committed-or-compensated / 1 fail-closed-UNCERTAIN); single-owner crash audit | `phase3/` (300 crashes/class), `gate1/failure_audit.py` |
-| **COMPENSATABLE** only compensates the ambiguous `effect_started` state; `prepared` (effect not begun) re-runs cleanly | `agenttx/gateway.py`, verified crash@{prepared→re-run, effect_started→compensate, committed→dedup} |
+| **Distributed turn-recovery protocol** (TRANSACTIONAL class): action-ordinal identity, atomic claim (`action_id` PK + `ON CONFLICT DO NOTHING` in the effect tx), owner-epoch fencing, WAL-as-source-of-truth — exactly-once under REAL multi-process concurrency + hard mid-tx `os._exit` + recovery sweep | `phase7/concurrent_gate.py` (400 turns × 2–6 racing OS processes → 1200/1200 actions, 0 double, 0 lost), `phase7/protocol_props.py` (P1–P5) |
+| **Distributed OVERLAY class** (NON-transactional filesystem effect): exactly-once under REAL multi-process concurrency + hard mid-effect `os._exit` (after-write AND after-publish) + recovery sweep, via idempotent action-id-named atomic-rename publish | `phase7/overlay_gate.py` (400 turns × 2–6 racing OS processes → 1200/1200 committed files, 0 duplicate, 0 lost, 0 tmp-promoted, legit-duplicate ordinals both execute) |
+| Tool Gateway: **TRANSACTIONAL exactly-once**, **OVERLAY/IDEMPOTENT effectively-once**, **IRREVERSIBLE fail-closed-UNCERTAIN** under single-owner crash audit (300 crashes/class) | `phase3/gateway_audit.py`, `phase3/results/gateway_audit.json` |
+| **Unified positional action identity** — `action_id = H(session, turn, commit_id, ordinal)` (full sha256), shared by the single-owner Gateway and the distributed `dtx.py`. Two identical-args calls at different ordinals BOTH execute (no silent lost effect); a replayed action whose args fingerprint changed FAILS CLOSED (`ContentMismatch`) | `agenttx/identity.py`, `phase3/identity_guard.py` (G1–G4 PASS) |
 | KV-View **content-addressed CAS is byte-exact** (`torch.equal`, 48 MB) and **fail-closed** on corruption / provenance mismatch | `phase2/kvview_gpu.py`, `phase2/results/kvview_gpu.json` |
 | On the **real τ²-bench retail** benchmark, scored by its own DB evaluator, a mid-effect crash makes naive recovery double-refund (10/15) while AgentTx's transactional wrap is exactly-once (15/15) | `phase6/tau2_midcrash.py` |
 
@@ -29,7 +30,8 @@ Every claim in this repo, graded against its evidence. Written after an adversar
 | claim | scope |
 |---|---|
 | Streaming exactly-once + multi-worker reroute | **output sequence/dedup protocol prototype**: `StreamLog` is an in-memory list and the client ACK is an in-memory field. The 20k audit + real-HTTP cross-check prove reconnect + seq-dedup ("exactly-once-visible output for a deduplicating client"), NOT persist-before-send, durable output log, or coordinator+stream-worker co-death recovery (TARGET = phase9). |
-| Tool Gateway non-transactional classes (OVERLAY/IDEMPOTENT/IRREVERSIBLE) | proven exactly-once / fail-closed at **single owner**; concurrent-recovery hardening done for TRANSACTIONAL (phase7), pending for the others. |
+| Tool Gateway IDEMPOTENT / IRREVERSIBLE classes | proven effectively-once / fail-closed at **single owner** (phase3, 300 crashes/class); concurrent-recovery hardening done for TRANSACTIONAL + OVERLAY (phase7), **pending for IDEMPOTENT**. |
+| **COMPENSATABLE** saga (`prepared → effect_started → committed`; only the ambiguous `effect_started` compensates, `prepared` re-runs cleanly) | **logic in `agenttx/gateway.py` only** — there is no concrete compensatable tool and no executed crash matrix yet. **Downgraded from PROVEN** (advisor): a "verified" grade requires an executed test, which this class does not have. |
 
 ## DOWN-PAYMENT (partially closed in phase8; rest still TARGET)
 - **Gateway inside the LIVE orchestrator** — DONE at the mechanism level: `phase8/tau2_live_ft.py` monkeypatches the AgentTx transactional wrap into tau2's `Environment.get_response`, driven by a **real live Qwen agent**; a real mid-turn crash on the agent's own money-moving call → **0 double-applied (4/4 tasks)**. Still TARGET: high task-success (stronger model), all classes live.
@@ -39,7 +41,7 @@ Every claim in this repo, graded against its evidence. Written after an adversar
 - Restore durable KV **into a fresh vLLM worker's attention** so decoding resumes (the 4.84–17× speedups do NOT yet ride on this path).
 - Durable output log (persist-before-send) + stream-worker/coordinator co-death + client restart.
 - Full SOTA matrix: DBOS + workflow-id / + idempotency key / + transactional outbox; Temporal; Atomix; Cordon.
-- Concurrent-recovery hardening for the NON-transactional classes + a TLA+ model for COMPENSATABLE/IRREVERSIBLE.
+- Concurrent-recovery hardening for the **IDEMPOTENT** class (TRANSACTIONAL + OVERLAY done in phase7) + a TLA+ model for COMPENSATABLE/IRREVERSIBLE.
 - A second hardware platform / GPU topology.
 
 ## Positioning

@@ -46,6 +46,15 @@ def _canon(args):
     return canonical_args(args)
 
 
+def _fsync_dir(path):
+    """fsync a directory so a rename into it is durable across a crash."""
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 class DTX:
     def __init__(self, db):
         self.db = db
@@ -117,6 +126,46 @@ class DTX:
             res = {"order": args["order"], "amount": args["amount"]}
             db.execute("UPDATE actions SET result=? WHERE action_id=?", (json.dumps(res), aid))
         return ("committed", res)
+
+    # ---- distributed OVERLAY (non-transactional FS effect) ----------------------------------
+    # An overlay effect is NOT a DB row, so it cannot share the claim's transaction. Instead it is
+    # made idempotent by construction: the committed file is named by the action_id and published
+    # by an ATOMIC rename. Multiple racing coordinators (and post-crash recovery) all target the
+    # SAME final path with IDENTICAL content -> at most one committed file per action, re-runs are
+    # no-ops. Correctness therefore needs no fence (a stale coordinator re-doing it is harmless);
+    # the DB action row is written AFTER the file is durable, so a committed row always has its file
+    # (no ghost), and a crash before the row just means recovery re-publishes/records.
+    def do_overlay(self, session, turn, commit_id, ordinal, args, epoch, store, crash=None):
+        aid = action_id(session, turn, commit_id, ordinal)
+        afp = args_fingerprint(args)
+        committed_dir = os.path.join(store, "committed")
+        overlay_dir = os.path.join(store, "overlay")
+        final = os.path.join(committed_dir, f"{aid}.receipt")
+        if os.path.exists(final):                            # idempotent dedup: already published
+            self._record_overlay(session, turn, aid, ordinal, afp, epoch)
+            return ("dedup", final)
+        # write a coordinator-UNIQUE temp (so racers never clobber each other mid-write), fsync,
+        # then atomically rename to the action-id'd final name.
+        tmp = os.path.join(overlay_dir, f"{aid}.{os.getpid()}.{epoch}.tmp")
+        with open(tmp, "w") as f:
+            f.write(_canon(args)); f.flush(); os.fsync(f.fileno())
+        if crash == "hard_after_write":                      # DEATH after temp, BEFORE publish ->
+            os._exit(7)                                      #   orphan tmp, NO final -> recovery republishes
+        os.replace(tmp, final)                               # ATOMIC publish (idempotent under races)
+        _fsync_dir(committed_dir)
+        if crash == "hard_after_publish":                    # DEATH after file, BEFORE DB row ->
+            os._exit(7)                                      #   recovery sees the file -> dedups + records
+        self._record_overlay(session, turn, aid, ordinal, afp, epoch)
+        return ("committed", final)
+
+    def _record_overlay(self, session, turn, aid, ordinal, afp, epoch):
+        """Durable observation that this overlay action committed. Written only AFTER the file is
+        durable; ON CONFLICT DO NOTHING so concurrent coordinators don't fight."""
+        self.db.execute(
+            "INSERT INTO actions(action_id,session,turn,ordinal,tool,args_fp,klass,state,owner_epoch) "
+            "VALUES(?,?,?,?,?,?,'overlay','committed',?) ON CONFLICT(action_id) DO NOTHING",
+            (aid, session, turn, ordinal, "receipt", afp, epoch))
+        self.db.commit()
 
     # ---- self-contained recovery: reload plan from the DB, re-run (dedups) ----
     def run_turn(self, session, turn, plan=None, epoch=None, crash_at=None):

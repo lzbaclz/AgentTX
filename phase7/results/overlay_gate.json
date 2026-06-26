@@ -1,0 +1,18 @@
+{
+  "gate": "real multi-process concurrent recovery for the OVERLAY (filesystem) class",
+  "turns": 400,
+  "racing_coordinators_per_turn": "2-6 + hard mid-effect os._exit (after-write / after-publish) + sweep",
+  "expected_files": 1200,
+  "committed_files": 1200,
+  "distinct_committed_action_ids": 1200,
+  "duplicate_committed_files": 0,
+  "lost_logical_actions": 0,
+  "unexpected_committed_files": 0,
+  "non_receipt_files_in_committed": 0,
+  "orphan_tmps_remaining": 168,
+  "legit_duplicate_both_executed": true,
+  "committed_action_rows": 1200,
+  "committed_turns": 400,
+  "OVERLAY_GATE_PASS": true,
+  "reads": "K real OS processes per turn race to run/recover the same durable turn of OVERLAY (filesystem) actions, with hard mid-effect process death (after temp-write / after atomic-publish) + a recovery sweep. The committed file is named by action_id and published by an atomic rename, so the effect is idempotent under any interleaving: exactly one committed file per logical action, none lost, no tmp promoted, and two identical-args actions at different ordinals BOTH produce a file."
+}
