@@ -1,11 +1,17 @@
-# AgentTx — results & evidence map
+# AgentTx — results & evidence map (Cross-Plane Crash Consistency for Stateful LLM Agents)
 
-**AgentTx: Exactly-Once Turn Transactions for Fault-Tolerant LLM Agents.** A turn (LLM
-generation + tool side-effects + conversation/KV state + client output) is one cross-layer
-transaction. A **durable turn log** is the single source of truth; the **KV cache is a
-materialized view** (rebuildable, fail-closed-verified). A worker can crash at ANY point and
-the turn resumes elsewhere with no duplicate effects, no lost effects, no ghost observations,
-and no duplicated/lost client tokens.
+**AgentTx: Cross-Plane Crash Consistency for Stateful LLM Agents.** A turn (LLM generation + tool
+side-effects + conversation/KV state + client output) is one cross-layer transaction. A **durable
+turn log** is the single source of truth; the **KV cache is a materialized view** (rebuildable,
+fail-closed-verified). Goal: after any component crashes, recover to a single **committed turn
+prefix** — no duplicate/lost effects, no ghost observations, no duplicated/lost client tokens.
+
+> ⚠️ **Every row below is graded in [`docs/CLAIM_LEDGER.md`](docs/CLAIM_LEDGER.md)** (PROVEN /
+> MEASURED-PROXY / PROTOTYPE / TARGET). The death-gate/Phase-1–6 tables below are the *original*
+> build log; the **graded headline** (next section) is the honest, advisor-reviewed summary.
+> In particular: KV speedups are MEASURED-PROXY (vLLM CPU offload, same process), the "100k/120,900"
+> are single-owner protocol-model schedules, "resumes elsewhere" is same-process — the PROVEN
+> distributed result is `phase7/`. This is not "first agent transaction runtime" (Atomix/Cordon).
 
 ## Death gate (falsify-before-invest) — all PASS
 | gate | question | result |
@@ -25,21 +31,35 @@ and no duplicated/lost client tokens.
 | 5 | end-to-end eval | **100,000 full-stack fault injections, 0 violations** (120,900 grand total w/ Phase 3+4); 2 models; strong-gate scorecard (`phase5/`) |
 | 6 | **real tau2-bench (τ²) retail** tool environment | mid-effect crash on real `cancel_pending_order`, scored by tau2's own DB evaluator: naive **10/15 (5 double-refunds)** vs AgentTx **15/15 (0)**; full-replay honest finding: tools self-guard (85/85); LLM agent path runs end-to-end via local vLLM, 0 integration errors (`phase6/`) |
 
-## Headline numbers
-- **Phase-5 full-stack sweep: 100,000 fault injections, 0 correctness violations** (0 dup/lost/ghost,
-  0 stream violations), including crash-during-recovery (19,991) and KV-snapshot corruption (19,965).
-  Grand total of crash-injection trials across the whole eval = **120,900** (100,000 full-stack +
-  20,000 streaming + 900 gateway), all 0 violations.
-- Recovery via KV-as-materialized-view (context-dependent, KV restore vs transcript re-prefill):
-  **1.82x @4K, 12.45x @16K, 16.97x @32K** (Gate-1b, Llama-3.1-8B); **7.81x @16K** (Gate-2b e2e);
-  **4.84x (Llama) / 3.79x (Qwen) @8K** (Phase-5 e2e).
-- Steady-state durability overhead: **0.70 ms/turn (~0.7% of a 100 ms turn)**.
-- Coverage: 3 tool environments, **2 real baselines (DBOS, LangGraph)**, 2 models (Llama-3.1-8B,
-  Qwen3-8B), fail-closed `UNCERTAIN` for non-idempotent irreversible APIs.
+## Headline numbers — graded (see [`docs/CLAIM_LEDGER.md`](docs/CLAIM_LEDGER.md))
+- **[PROVEN] Distributed turn-recovery protocol** (`phase7/`): 400 turns × 2–6 **real racing OS
+  processes** + hard mid-tx `os._exit` + recovery sweep on PostgreSQL → **1200/1200 actions
+  exactly-once, 0 double, 0 lost**; 5/5 protocol properties (identity, claim-dedup, fencing,
+  crash-rollback, WAL-self-contained-recovery).
+- **[PROVEN]** Real **DBOS 2.25.0** (charges 1 / receipts 2) and **LangGraph 1.2.6** (2/2) duplicate
+  non-transactional effects; AgentTx is exactly-once. Tool taxonomy: 4 exactly-once / 1
+  committed-or-compensated / 1 fail-closed-UNCERTAIN.
+- **[PROVEN]** Real **τ²-bench retail**, scored by its own DB evaluator: mid-effect crash → naive
+  10/15 (5 double-refunds) vs AgentTx 15/15 (0).
+- **[MEASURED-PROXY]** KV recovery speedup 1.82×@4K / 12.45×@16K / 16.97×@32K (Gate-1b), 7.81×@16K
+  (Gate-2b), 4.84×/3.79×@8K (Phase-5) — measured via **vLLM's own CPU-offload tier in the same
+  process**, NOT AgentTx durable CAS, NOT across a real worker crash. Performance *potential* only.
+  (The CAS itself is byte-exact + fail-closed — `phase2/kvview_gpu.py` — that part is PROVEN.)
+- **[MEASURED-PROXY]** "100,000 / 120,900 fault injections" = **single-owner, in-process,
+  protocol-model schedules** (Python-exception crashes, one SQLite, fixed output). Rigorous as a
+  state-machine test; NOT whole-stack. Real-process concurrency evidence is `phase7/` (400×K procs).
+- **[PROTOTYPE]** Streaming = output sequence/dedup protocol (in-memory `StreamLog`); proves
+  reconnect+dedup, not durable persist-before-send.
+- Steady-state durability overhead: **0.70 ms/turn (~0.7%)** (Gate-2c).
 
-## Honest scope (camera-ready work)
-Real SWE-bench/BFCL/Agent-Diff task-success (the agent loop uses real LLM generation/KV + a
-fixed action plan; full benchmark tool environments are the remaining eval breadth); a 2nd
-hardware/topology; live offload-tier per-block checksums (the byte-level CAS is proven on real
-GPU KV bytes in `phase2/kvview_gpu.py`). Stack: dual A100, vLLM 0.22.1, Postgres 18.4, DBOS 2.25,
-LangGraph 1.2.6.
+## Honest scope — what is NOT done (TARGET)
+- Durable **cross-process KV restore** into a fresh vLLM worker's attention after a real `SIGKILL`
+  (down-payment: `phase8/`). The 4.84–17× numbers do NOT yet ride on AgentTx's durable CAS.
+- Durable **output log** (persist-before-send) + stream-worker/coordinator co-death + client restart.
+- **Full SOTA matrix**: DBOS + idempotency-key / + transactional outbox; Temporal; Atomix; Cordon.
+- **End-to-end agent-task success** with the gateway + fault injection **inside the live LLM
+  orchestrator loop** (down-payment: `phase8/tau2_live_ft.py`).
+- A 2nd hardware/topology. Stack: dual A100, vLLM 0.22.1, Postgres 18.4, DBOS 2.25.0, LangGraph 1.2.6.
+
+This is **not** "first agent transaction runtime" (Atomix/Cordon precede us); positioning =
+cross-plane crash-consistent recovery to a committed turn prefix ([`docs/GATE0_REOPEN.md`](docs/GATE0_REOPEN.md)).

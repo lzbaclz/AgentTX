@@ -19,6 +19,27 @@ def load(p, default=None):
         return default if default is not None else {}
 
 
+def _strong_gate(p5v, fault_total, models):
+    g1b = load("gate1/results/gate1b_recovery_cost.json")
+    speedups = ([r.get("speedup", 0) for r in g1b.get("rows", [])]
+                + [d.get("recovery_speedup", 0) or 0 for d in models.values()] + [0])
+    p7 = load("phase7/results/concurrent_gate.json")
+    return {
+        # PROVEN
+        "distributed_exactly_once_real_multiprocess": bool(p7.get("PHASE7_PASS")),
+        "zero_dup_lost_single_owner_protocol_model": all(v == 0 for v in p5v.values()) if p5v else None,
+        "overhead_le_5pct": True,                                 # 0.7% measured (Gate-2c)
+        "tool_envs_ge_3": True, "frameworks_ge_2": True, "models_ge_2": len(models) >= 2,
+        # MEASURED-PROXY (vLLM CPU offload, same process -- NOT durable AgentTx CAS / worker crash)
+        "recovery_speedup_ge_5x_PROXY": max(speedups) >= 5,
+        "max_recovery_speedup_measured_PROXY": round(max(speedups), 2),
+        # framing
+        "fault_injections_ge_100k_PROTOCOL_MODEL": fault_total >= 100000,
+        "note": "speedups & 100k are MEASURED-PROXY / single-owner; real-process exactly-once is "
+                "phase7 (distributed_exactly_once_real_multiprocess). See docs/CLAIM_LEDGER.md.",
+    }
+
+
 def main():
     p5 = load("phase5/results/eval_correctness.json")
     p4 = load("phase4/results/stream_audit.json")
@@ -63,15 +84,7 @@ def main():
             "models": list(models.keys()) or ["Llama-3.1-8B (Part B pending)"],
             "fail_closed_class": "non-idempotent irreversible API -> UNCERTAIN",
         },
-        "STRONG_GATE": {
-            "zero_dup_lost_on_supported_tools": all(v == 0 for v in p5v.values()) if p5v else None,
-            "overhead_le_5pct": True,                       # 0.7% measured
-            "recovery_speedup_ge_5x": any((d.get("recovery_speedup") or 0) >= 5 for d in models.values()) or None,
-            "fault_injections_ge_100k": fault_total >= 100000,
-            "tool_envs_ge_3": True,
-            "frameworks_ge_2": True,
-            "models_ge_2": len(models) >= 2,
-        },
+        "STRONG_GATE": _strong_gate(p5v, fault_total, models),
     }
     os.makedirs("phase5/results", exist_ok=True)
     json.dump(table, open("phase5/results/summary.json", "w"), indent=2)

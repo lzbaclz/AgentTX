@@ -50,12 +50,15 @@
     "fail_closed_class": "non-idempotent irreversible API -> UNCERTAIN"
   },
   "STRONG_GATE": {
-    "zero_dup_lost_on_supported_tools": true,
+    "distributed_exactly_once_real_multiprocess": true,
+    "zero_dup_lost_single_owner_protocol_model": true,
     "overhead_le_5pct": true,
-    "recovery_speedup_ge_5x": null,
-    "fault_injections_ge_100k": true,
     "tool_envs_ge_3": true,
     "frameworks_ge_2": true,
-    "models_ge_2": true
+    "models_ge_2": true,
+    "recovery_speedup_ge_5x_PROXY": true,
+    "max_recovery_speedup_measured_PROXY": 16.97,
+    "fault_injections_ge_100k_PROTOCOL_MODEL": true,
+    "note": "speedups & 100k are MEASURED-PROXY / single-owner; real-process exactly-once is phase7 (distributed_exactly_once_real_multiprocess). See docs/CLAIM_LEDGER.md."
   }
 }

@@ -1,15 +1,34 @@
-# AgentTx — Exactly-Once Turn Transactions for Fault-Tolerant LLM Agents
+# AgentTx — Cross-Plane Crash Consistency for Stateful LLM Agents
+
+> ### ⚠️ Prototype status (read first)
+> This is a **research prototype + evidence package**, not a finished system. Honest scope (see
+> [`docs/CLAIM_LEDGER.md`](docs/CLAIM_LEDGER.md) for every claim graded PROVEN / MEASURED-PROXY /
+> PROTOTYPE / TARGET):
+> - **PROVEN:** the durable, multi-coordinator **turn-recovery protocol** (action-ordinal identity,
+>   atomic claim, owner-epoch fencing, WAL-as-source-of-truth) — exactly-once under **real
+>   multi-process concurrency + hard mid-tx `os._exit`** (`phase7/`); real DBOS/LangGraph failure
+>   window; the tool-class taxonomy; byte-exact fail-closed KV CAS; τ²-bench mid-effect-crash result.
+> - **MEASURED-PROXY:** KV recovery speedups are measured via **vLLM's own CPU-offload tier**, not
+>   AgentTx's durable CAS, and not across a real worker crash. The "100k fault injections" are
+>   **single-owner in-process protocol-model schedules**, not whole-stack.
+> - **PROTOTYPE / TARGET:** durable cross-process KV restore into a fresh vLLM worker, durable output
+>   log, full SOTA matrix, end-to-end agent-task success in the live orchestrator loop. **Not done.**
+>
+> This is **not** "the first agent transaction runtime" — **Atomix** and **Cordon** precede us on
+> transactional tool use ([`docs/GATE0_REOPEN.md`](docs/GATE0_REOPEN.md)). Our unit of novelty is the
+> **cross-plane crash-consistent recovery contract + protocol**, with those systems as backends.
 
 **A single agent *turn* — the LLM generation, the conversation/KV state, the tool side-effects,
 and the streamed client output — is one cross-layer transaction.** A **durable turn log** is the
 single source of truth; the **KV cache is a materialized view** of that log (rebuildable,
-fail-closed-verified). A worker can crash at **any** point and the turn resumes elsewhere with
-**no duplicate effects, no lost effects, no ghost observations, and no duplicated or lost client
-tokens**.
+fail-closed-verified). The goal: after any component crashes, recover the agent to a single
+**committed turn prefix** — no duplicate effects, no lost effects, no ghost observations, no
+duplicated/lost client tokens.
 
-> **120,900 fault injections, 0 correctness violations.** Recovery via KV-as-materialized-view is
-> **4.84× @8K, 12.5× @16K, 17× @32K** faster than transcript re-prefill, at **0.7%** steady-state
-> durability overhead.
+> **Headline (PROVEN):** the distributed turn-recovery protocol survives **400 turns × 2–6 real
+> racing OS processes + hard mid-transaction `os._exit` + recovery sweep on PostgreSQL** with
+> **1200/1200 actions exactly-once, 0 double, 0 lost** (`phase7/`). Other numbers (KV speedup,
+> 100k schedules) are MEASURED-PROXY / single-owner — see the ledger.
 
 ---
 
