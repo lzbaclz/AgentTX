@@ -18,6 +18,7 @@ Every claim in this repo, graded against its evidence. Written after an adversar
 | Tool Gateway: **TRANSACTIONAL exactly-once**, **OVERLAY/IDEMPOTENT effectively-once**, **IRREVERSIBLE fail-closed-UNCERTAIN** under single-owner crash audit (300 crashes/class) | `phase3/gateway_audit.py`, `phase3/results/gateway_audit.json` |
 | **Unified positional action identity** — `action_id = H(session, turn, commit_id, ordinal)` (full sha256), shared by the single-owner Gateway and the distributed `dtx.py`. Two identical-args calls at different ordinals BOTH execute (no silent lost effect); a replayed action whose args fingerprint changed FAILS CLOSED (`ContentMismatch`) | `agenttx/identity.py`, `phase3/identity_guard.py` (G1–G4 PASS) |
 | KV-View **content-addressed CAS is byte-exact** (`torch.equal`, 48 MB) and **fail-closed** on corruption / provenance mismatch | `phase2/kvview_gpu.py`, `phase2/results/kvview_gpu.json` |
+| **Durable output log (persist-before-send)**: the client materializes the committed token prefix exactly once — no loss, no duplicate — across REAL worker `os._exit`, coordinator+streamer co-death, lost ACKs, and client restart, by re-sending LOGGED tokens (never regenerating) | `agenttx/durable_stream.py`, `phase9/durable_stream_gate.py` (300 turns: 163 worker deaths, 24 client restarts, 134 ACK drops, 9 co-deaths → 300/300 exactly-once, 0 loss/dup, 386 resends deduped) |
 | On the **real τ²-bench retail** benchmark, scored by its own DB evaluator, a mid-effect crash makes naive recovery double-refund (10/15) while AgentTx's transactional wrap is exactly-once (15/15) | `phase6/tau2_midcrash.py` |
 
 ## MEASURED-PROXY (downgraded from earlier overclaims)
@@ -30,7 +31,7 @@ Every claim in this repo, graded against its evidence. Written after an adversar
 ## PROTOTYPE
 | claim | scope |
 |---|---|
-| Streaming exactly-once + multi-worker reroute | **output sequence/dedup protocol prototype**: `StreamLog` is an in-memory list and the client ACK is an in-memory field. The 20k audit + real-HTTP cross-check prove reconnect + seq-dedup ("exactly-once-visible output for a deduplicating client"), NOT persist-before-send, durable output log, or coordinator+stream-worker co-death recovery (TARGET = phase9). |
+| Streaming exactly-once + multi-worker reroute | The original phase4 `StreamLog`/ACK are in-memory; **the durable version now exists** (`agenttx/durable_stream.py`, phase9 PROVEN above). Remaining prototype edges: phase9 uses a single SQLite durable store (not yet a replicated/distributed log), and the client is modeled by a durable receipt log rather than a real network endpoint. |
 | Tool Gateway IDEMPOTENT / IRREVERSIBLE classes | proven effectively-once / fail-closed at **single owner** (phase3, 300 crashes/class); concurrent-recovery hardening done for TRANSACTIONAL + OVERLAY (phase7), **pending for IDEMPOTENT**. |
 | **COMPENSATABLE** saga (`prepared → effect_started → committed`; only the ambiguous `effect_started` compensates, `prepared` re-runs cleanly) | **logic in `agenttx/gateway.py` only** — there is no concrete compensatable tool and no executed crash matrix yet. **Downgraded from PROVEN** (advisor): a "verified" grade requires an executed test, which this class does not have. |
 
@@ -40,7 +41,7 @@ Every claim in this repo, graded against its evidence. Written after an adversar
 
 ## TARGET (not yet built/proven — never cite as a result)
 - Restore durable KV **into a fresh vLLM worker's attention** so decoding resumes (the 4.84–17× speedups do NOT yet ride on this path).
-- Durable output log (persist-before-send) + stream-worker/coordinator co-death + client restart.
+- Replicated/distributed durable output log (phase9 proves persist-before-send + co-death + restart on a single durable store; a multi-node replicated log is the remaining step).
 - Full SOTA matrix: **DBOS + idempotency-key / + transactional-outbox now measured** (both close the single-plane gap, `adapters/dbos_recommended.py`); **Temporal, Atomix, Cordon still TARGET** (qualitative/code-characterized for now).
 - Concurrent-recovery hardening for the **IDEMPOTENT** class (TRANSACTIONAL + OVERLAY done in phase7) + a TLA+ model for COMPENSATABLE/IRREVERSIBLE.
 - A second hardware platform / GPU topology.

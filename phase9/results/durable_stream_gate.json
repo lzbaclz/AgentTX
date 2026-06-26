@@ -1,0 +1,15 @@
+{
+  "gate": "durable output streaming under real worker os._exit + co-death + ACK loss + client restart",
+  "turns": 300,
+  "turns_exactly_once": 300,
+  "worker_deaths": 163,
+  "client_restarts": 24,
+  "ack_drops": 134,
+  "codeath_turns": 9,
+  "loss": 0,
+  "duplicate": 0,
+  "not_completed": 0,
+  "resends_deduped": 386,
+  "PHASE9_PASS": true,
+  "reads": "Output tokens are committed durably (persist-before-send) BEFORE any worker streams. Real worker SUBPROCESSES stream and die hard (os._exit) mid-stream; the server ACK is dropped (lags the client); the client RESTARTS (loses state). A fresh worker resumes from min(server_ack, client_ack) -- always safe -- and RE-SENDS logged tokens (never regenerates), which the client dedups by seq. The client materializes the committed prefix exactly once, in order, no loss, across all of it."
+}

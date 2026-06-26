@@ -78,13 +78,14 @@ fail-closed `UNCERTAIN` — about the one class where no orchestrator can guaran
   + a **content-addressed block manifest**; restore verifies both and **fails closed** (recompute
   from the durable token log) on any mismatch. A lost snapshot costs only *speed*; a corrupt or
   stale snapshot can *never* produce wrong output.
-- **Output is streamed exactly-once** *(against worker reroute; PROTOTYPE)*. Tokens tagged
-  `(session, turn, seq)`; the client keeps an ACK watermark and dedups, so a mid-stream crash +
-  reroute re-sends duplicates the client drops. Proven only for a deduplicating client vs reroute —
-  **not** against loss of the output log or coordinator co-death, and today the log/ACK are
-  *in-memory* ([`stream.py`](agenttx/stream.py)), not a durable persist-before-send. Correctness also
-  requires re-sending *logged* tokens (not regenerating — free generation diverges across the
-  KV-reuse boundary).
+- **Output is streamed exactly-once** *(durable; persist-before-send)*. Output tokens are committed
+  to a **durable log before any worker sends them**; tokens are tagged `(session, turn, seq)` and the
+  client keeps a durable ACK watermark and dedups. A re-routed worker **re-sends logged tokens, never
+  regenerates** (free generation diverges across the KV-reuse boundary). Proven across real worker
+  `os._exit`, coordinator+streamer co-death, lost ACKs, and client restart
+  ([`agenttx/durable_stream.py`](agenttx/durable_stream.py), [`phase9/`](phase9/)); the in-memory
+  phase4 protocol is superseded. Remaining edge: a *replicated/distributed* log (phase9 uses one
+  durable store).
 
 ### Turn invariants (abstract model crash-enumerated)
 
@@ -174,6 +175,7 @@ single-owner.
 |---|---|---|
 | distributed exactly-once (Tx class) | **1200/1200 actions, 0 dup/lost** | **PROVEN** — real multi-process `os._exit`, Postgres ([`phase7/concurrent_gate.py`](phase7/concurrent_gate.py)) |
 | distributed exactly-once (OVERLAY class) | **1200/1200 files, 0 dup/lost/promoted** | **PROVEN** — real multi-process `os._exit` (after-write + after-publish) ([`phase7/overlay_gate.py`](phase7/overlay_gate.py)) |
+| durable output plane (persist-before-send) | **300/300 turns, 0 loss/dup** | **PROVEN** — real worker `os._exit` + co-death + lost-ACK + client-restart ([`phase9/`](phase9/)) |
 | dup/lost/ghost, single-owner protocol | **0** | **MEASURED-PROXY** — ~100k in-process schedules + 500 `os._exit` xcheck |
 | ghost observations | **0** | MEASURED-PROXY (single-owner) |
 | recovery speedup | **12.5–17× @16–32K** (4.84× @8K) | **MEASURED-PROXY** — vLLM offload-tier restore vs cold re-prefill, no worker crash |
@@ -233,6 +235,7 @@ committing to the full system.
 | **6** | AgentTx on the **real τ²-bench** retail environment | constructed mid-refund crash: naive 5/15 double, AgentTx 0/15; full bench self-guards (no gap) — **PROVEN/honest** ([`phase6/`](phase6/)) |
 | **7** | **distributed turn-recovery protocol** (ordinal identity, atomic claim, owner-epoch fencing) | TRANSACTIONAL **and** OVERLAY classes exactly-once under real multi-process `os._exit`, Postgres — 1200/1200 each — **PROVEN** ([`phase7/`](phase7/)) |
 | **8** | live-orchestrator FT + durable cross-process KV — **down-payments** | partial; real cross-process KV restore into a fresh vLLM worker is **TARGET, not done** ([`phase8/`](phase8/)) |
+| **9** | **durable output log** (persist-before-send) | client materializes the committed prefix exactly-once across real worker `os._exit` + co-death + lost ACKs + client restart — 300/300, 0 loss/dup — **PROVEN** (single durable store) ([`phase9/`](phase9/)) |
 
 ---
 
@@ -349,8 +352,9 @@ Ordered by how load-bearing they are to the headline claims:
    implement real cross-process restore (SIGKILL → fresh vLLM → load CAS → resume) and account for snapshot cost.*
 3. **`COMPENSATABLE` has logic but no executed test** and no concrete tool. *Fix: implement a real
    compensatable tool + run it through the `phase3/` hard-crash matrix, or grade it TARGET.*
-4. **The streaming/output plane is in-memory**, not a durable persist-before-send log; no
-   coordinator+stream-worker co-death test. *Fix: durable output WAL + co-death recovery test.*
+4. ~~The streaming/output plane is in-memory~~ **RESOLVED** — durable persist-before-send output log
+   with co-death + client-restart recovery ([`phase9/`](phase9/), 300/300). Remaining: a
+   *replicated/distributed* log (phase9 uses a single durable store).
 5. **Crash fidelity & statistics.** ~99.6% of the "fault injections" are in-process exceptions on a
    live DB connection (graceful abort), single RNG seed, no CIs, no torn-write/fsync-fault test.
    *Fix: re-run a meaningful fraction under `os._exit`, multiple seeds + Clopper-Pearson bounds, add a torn-WAL test.*
