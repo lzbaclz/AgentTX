@@ -185,16 +185,25 @@ single-owner.
 
 ### Baselines, head-to-head (same crash: effect fires, framework crashes before recording it)
 
-| system | version | transactional charge | non-transactional receipt |
+| system / config | version | transactional charge | non-transactional receipt |
 |---|---|---|---|
-| real DBOS | 2.25.0 | **1 (exactly-once)** | **2 (DUPLICATED)** ← the gap |
-| real LangGraph | 1.2.6 (PostgresSaver) | **2 (DUPLICATED)** | **2 (DUPLICATED)** |
+| real DBOS — *naked* (`@DBOS.step`, uuid file) | 2.25.0 | **1 (exactly-once)** | **2 (DUPLICATED)** ← default-config gap |
+| real DBOS — **+ idempotency key** | 2.25.0 | **1** | **1 (exactly-once)** — gap CLOSED |
+| real DBOS — **+ transactional outbox** | 2.25.0 | **1** | **1 (exactly-once)** — gap CLOSED |
+| real LangGraph — *naked* (PostgresSaver) | 1.2.6 | **2 (DUPLICATED)** | **2 (DUPLICATED)** |
 | **AgentTx** | — | **1 (exactly-once)** | **1 (exactly-once)** |
 
-Caveat: the baselines are the *naked* DBOS/LangGraph configs — a uuid-named file write inside a
-non-transactional step. AgentTx's fix (content-address by `action_key`) ports into a DBOS step, so
-this shows a default-config gap, not a fundamental one; DBOS+idempotency-key / +outbox and
-Atomix/Cordon are **not yet** measured ([`docs/GATE0_REOPEN.md`](docs/GATE0_REOPEN.md)).
+(All rows measured: [`adapters/dbos_baseline.py`](adapters/dbos_baseline.py),
+[`adapters/dbos_recommended.py`](adapters/dbos_recommended.py), [`gate1/results/`](gate1/results/).)
+
+> **Honest takeaway (not "DBOS is incapable").** DBOS's *recommended* configs — a deterministic
+> idempotency key, or a transactional outbox + idempotent relay — make the receipt exactly-once
+> under the very crash that duplicates the naked config. The fix (deterministic key + idempotent
+> atomic publish) **is** AgentTx's `OVERLAY` mechanism. So AgentTx's contribution is **not** beating
+> DBOS on one transactional effect; it is (1) applying the right mechanism **per tool class
+> automatically** (the taxonomy), so a developer need not hand-roll an idempotency key/outbox per
+> tool, and (2) binding that to the KV view + output log as **one cross-plane turn recovery**.
+> Atomix/Cordon remain unmeasured prior art ([`docs/GATE0_REOPEN.md`](docs/GATE0_REOPEN.md)).
 
 ---
 

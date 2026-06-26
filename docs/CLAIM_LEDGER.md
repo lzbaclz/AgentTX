@@ -11,7 +11,8 @@ Every claim in this repo, graded against its evidence. Written after an adversar
 ## PROVEN
 | claim | evidence |
 |---|---|
-| Real **DBOS 2.25.0** and **LangGraph 1.2.6** do NOT make non-transactional effects exactly-once (DBOS charges 1 / receipts 2; LangGraph 2/2) | `gate1/REAL_BASELINES.md`, `gate1/results/real_*.json` |
+| Real **DBOS 2.25.0** and **LangGraph 1.2.6** in their *naked* config do NOT make non-transactional effects exactly-once (DBOS charges 1 / receipts 2; LangGraph 2/2) | `gate1/REAL_BASELINES.md`, `gate1/results/real_*.json` |
+| DBOS's **recommended** configs (deterministic idempotency key; transactional outbox + idempotent relay) **CLOSE** the non-transactional gap (receipts 1/1) under the same crash — so the gap is a default-config artifact, not fundamental; AgentTx's contribution is the **automatic per-class taxonomy + cross-plane binding**, not out-doing DBOS on one effect | `adapters/dbos_recommended.py`, `gate1/results/dbos_recommended.json` |
 | **Distributed turn-recovery protocol** (TRANSACTIONAL class): action-ordinal identity, atomic claim (`action_id` PK + `ON CONFLICT DO NOTHING` in the effect tx), owner-epoch fencing, WAL-as-source-of-truth — exactly-once under REAL multi-process concurrency + hard mid-tx `os._exit` + recovery sweep | `phase7/concurrent_gate.py` (400 turns × 2–6 racing OS processes → 1200/1200 actions, 0 double, 0 lost), `phase7/protocol_props.py` (P1–P5) |
 | **Distributed OVERLAY class** (NON-transactional filesystem effect): exactly-once under REAL multi-process concurrency + hard mid-effect `os._exit` (after-write AND after-publish) + recovery sweep, via idempotent action-id-named atomic-rename publish | `phase7/overlay_gate.py` (400 turns × 2–6 racing OS processes → 1200/1200 committed files, 0 duplicate, 0 lost, 0 tmp-promoted, legit-duplicate ordinals both execute) |
 | Tool Gateway: **TRANSACTIONAL exactly-once**, **OVERLAY/IDEMPOTENT effectively-once**, **IRREVERSIBLE fail-closed-UNCERTAIN** under single-owner crash audit (300 crashes/class) | `phase3/gateway_audit.py`, `phase3/results/gateway_audit.json` |
@@ -40,7 +41,7 @@ Every claim in this repo, graded against its evidence. Written after an adversar
 ## TARGET (not yet built/proven — never cite as a result)
 - Restore durable KV **into a fresh vLLM worker's attention** so decoding resumes (the 4.84–17× speedups do NOT yet ride on this path).
 - Durable output log (persist-before-send) + stream-worker/coordinator co-death + client restart.
-- Full SOTA matrix: DBOS + workflow-id / + idempotency key / + transactional outbox; Temporal; Atomix; Cordon.
+- Full SOTA matrix: **DBOS + idempotency-key / + transactional-outbox now measured** (both close the single-plane gap, `adapters/dbos_recommended.py`); **Temporal, Atomix, Cordon still TARGET** (qualitative/code-characterized for now).
 - Concurrent-recovery hardening for the **IDEMPOTENT** class (TRANSACTIONAL + OVERLAY done in phase7) + a TLA+ model for COMPENSATABLE/IRREVERSIBLE.
 - A second hardware platform / GPU topology.
 

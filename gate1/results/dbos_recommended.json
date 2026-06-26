@@ -1,0 +1,27 @@
+{
+  "baseline": "real-DBOS recommended configs",
+  "dbos_version": "2.25.0",
+  "naked_dbos_receipts": 2,
+  "variants": [
+    {
+      "variant": "idempotency_key",
+      "run_rc": 137,
+      "charges": 1,
+      "receipts": 1,
+      "transactional_exactly_once": true,
+      "nontransactional_exactly_once": true,
+      "gap_closed": true
+    },
+    {
+      "variant": "transactional_outbox",
+      "run_rc": 137,
+      "charges": 1,
+      "receipts": 1,
+      "transactional_exactly_once": true,
+      "nontransactional_exactly_once": true,
+      "gap_closed": true
+    }
+  ],
+  "both_close_the_gap": true,
+  "conclusion": "DBOS's recommended configs (deterministic idempotency key OR transactional outbox + idempotent relay) make the non-transactional receipt EXACTLY-ONCE under the same crash that duplicates the naked baseline. So the gap is a default-config artifact, not a fundamental DBOS limit: the fix (deterministic key + idempotent atomic publish) IS AgentTx's OVERLAY mechanism. AgentTx's contribution is applying the right per-class mechanism AUTOMATICALLY (the taxonomy) and binding it cross-plane (KV view + output log), not out-doing DBOS on a single transactional effect."
+}
