@@ -1,0 +1,9 @@
+{
+  "domain": "retail",
+  "model": "Qwen2.5-7B-Instruct@localvLLM",
+  "num_tasks": 2,
+  "agent_errors": 0,
+  "user_errors": 0,
+  "avg_reward": 0.0,
+  "note": "LLM agent path runs end-to-end on real tau2-bench; 0 integration errors; raw reward low = 8B capability not integration"
+}

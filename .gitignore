@@ -5,3 +5,5 @@ __pycache__/
 # PostgreSQL data directory — a live DB cluster, never version it
 pgdata/
 *.log
+.venv_tau/
+.venv_tau2b/

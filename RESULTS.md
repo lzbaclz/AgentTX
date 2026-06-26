@@ -23,6 +23,7 @@ and no duplicated/lost client tokens.
 | 3 | 3 real tool classes (Postgres tx / FS overlay / HTTP idempotency proxy) + fail-closed | 300 crashes/class -> exactly-once; non-idempotent API -> UNCERTAIN (`phase3/`) |
 | 4 | streaming exactly-once + multi-worker reroute | 20k turns 100% exactly-once, 45k re-sends deduped; real-HTTP cross-check (`phase4/`) |
 | 5 | end-to-end eval | **100,000 full-stack fault injections, 0 violations** (120,900 grand total w/ Phase 3+4); 2 models; strong-gate scorecard (`phase5/`) |
+| 6 | **real tau2-bench (τ²) retail** tool environment | mid-effect crash on real `cancel_pending_order`, scored by tau2's own DB evaluator: naive **10/15 (5 double-refunds)** vs AgentTx **15/15 (0)**; full-replay honest finding: tools self-guard (85/85); LLM agent path runs end-to-end via local vLLM, 0 integration errors (`phase6/`) |
 
 ## Headline numbers
 - **Phase-5 full-stack sweep: 100,000 fault injections, 0 correctness violations** (0 dup/lost/ghost,

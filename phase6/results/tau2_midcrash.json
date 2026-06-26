@@ -1,0 +1,25 @@
+{
+  "domain": "retail",
+  "tool": "cancel_pending_order (non-atomic, mid-effect crash)",
+  "cancel_tasks": 18,
+  "gold_established": 15,
+  "skipped": 3,
+  "naive": {
+    "success": 10,
+    "fail": 5,
+    "double_refund": 5
+  },
+  "agenttx": {
+    "success": 15,
+    "fail": 0,
+    "double_refund": 0
+  },
+  "headline": {
+    "criterion": "final DB hash == gold DB hash (real tau2 EnvironmentEvaluator DB reward)",
+    "naive_success_under_midcrash_pct": 66.7,
+    "agenttx_success_under_midcrash_pct": 100.0,
+    "naive_double_refunds": 5,
+    "agenttx_double_refunds": 0
+  },
+  "PHASE6_MIDCRASH_PASS": true
+}

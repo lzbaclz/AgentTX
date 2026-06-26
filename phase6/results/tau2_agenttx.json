@@ -1,0 +1,29 @@
+{
+  "domain": "retail",
+  "total_tasks": 114,
+  "money_moving_tasks": 97,
+  "gold_established": 85,
+  "skipped_gold_error": 12,
+  "naive": {
+    "success": 85,
+    "fail": 0,
+    "tasks_with_double_effect": 0
+  },
+  "agenttx_crash_before_commit": {
+    "success": 85,
+    "fail": 0
+  },
+  "agenttx_crash_after_commit": {
+    "success": 85,
+    "fail": 0
+  },
+  "headline": {
+    "evaluator_criterion": "final DB hash == gold DB hash (the real tau2 EnvironmentEvaluator DB reward)",
+    "naive_task_success_under_fault_pct": 100.0,
+    "agenttx_task_success_under_fault_pct_before_commit": 100.0,
+    "agenttx_task_success_under_fault_pct_after_commit": 100.0,
+    "naive_tasks_double_charged": 0,
+    "agenttx_tasks_double_charged": 0
+  },
+  "PHASE6_PASS": false
+}
