@@ -31,12 +31,15 @@ Every claim in this repo, graded against its evidence. Written after an adversar
 | Streaming exactly-once + multi-worker reroute | **output sequence/dedup protocol prototype**: `StreamLog` is an in-memory list and the client ACK is an in-memory field. The 20k audit + real-HTTP cross-check prove reconnect + seq-dedup ("exactly-once-visible output for a deduplicating client"), NOT persist-before-send, durable output log, or coordinator+stream-worker co-death recovery (TARGET = phase9). |
 | Tool Gateway non-transactional classes (OVERLAY/IDEMPOTENT/IRREVERSIBLE) | proven exactly-once / fail-closed at **single owner**; concurrent-recovery hardening done for TRANSACTIONAL (phase7), pending for the others. |
 
+## DOWN-PAYMENT (partially closed in phase8; rest still TARGET)
+- **Gateway inside the LIVE orchestrator** — DONE at the mechanism level: `phase8/tau2_live_ft.py` monkeypatches the AgentTx transactional wrap into tau2's `Environment.get_response`, driven by a **real live Qwen agent**; a real mid-turn crash on the agent's own money-moving call → **0 double-applied (4/4 tasks)**. Still TARGET: high task-success (stronger model), all classes live.
+- **Durable cross-process KV** — durability+integrity DONE: `phase8/kv_durable.py` `SIGKILL`s the producer; a **fresh process** reloads 32 MB **byte-exact + fail-closed** from the durable CAS (survives the crash vLLM's in-process CPU-offload tier does not). Still TARGET: injecting bytes into a **new vLLM engine's attention** to resume decoding.
+
 ## TARGET (not yet built/proven — never cite as a result)
-- Durable, cross-process / cross-host KV restore loaded into a **fresh** vLLM worker's attention (real `SIGKILL` → new worker → reload AgentTx CAS → teacher-force → continue). Down-payment in `phase8/` (see its README for exactly what is and isn't proven).
+- Restore durable KV **into a fresh vLLM worker's attention** so decoding resumes (the 4.84–17× speedups do NOT yet ride on this path).
 - Durable output log (persist-before-send) + stream-worker/coordinator co-death + client restart.
 - Full SOTA matrix: DBOS + workflow-id / + idempotency key / + transactional outbox; Temporal; Atomix; Cordon.
-- End-to-end agent-task success with the gateway + fault injection **inside the live LLM orchestrator loop** (down-payment in `phase8/tau2_live_ft.py`).
-- Concurrent-recovery hardening + a TLA+ model for COMPENSATABLE and IRREVERSIBLE.
+- Concurrent-recovery hardening for the NON-transactional classes + a TLA+ model for COMPENSATABLE/IRREVERSIBLE.
 - A second hardware platform / GPU topology.
 
 ## Positioning
