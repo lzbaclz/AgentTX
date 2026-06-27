@@ -1,0 +1,20 @@
+{
+  "transactional": {
+    "states_explored": 601,
+    "violations": 0
+  },
+  "idempotent": {
+    "states_explored": 1491,
+    "violations": 0
+  },
+  "overlay": {
+    "states_explored": 1491,
+    "violations": 0
+  },
+  "irreversible": {
+    "states_explored": 1937,
+    "violations": 0
+  },
+  "MODEL_CHECK_PASS": true,
+  "reads": "Exhaustive over all 2-coordinator interleavings (acquire/do/crash/recover) up to epoch 5, per tool class: no double effect, no stale-owner effect, irreversible never silent-doubles (ambiguous window -> UNCERTAIN)."
+}
