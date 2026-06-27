@@ -1,0 +1,8 @@
+{
+  "cas_dir": "/tmp/atx_kv_cas",
+  "bin_files": 1664,
+  "total_bin_MB": 3489.7,
+  "config_files": 1,
+  "SMOKE_PASS": true,
+  "reads": "vLLM OffloadingConnector + TieringOffloadingSpec spilled KV to the fs_python durable content-addressed tier on disk (block files named by content hash)."
+}

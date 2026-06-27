@@ -1,0 +1,14 @@
+{
+  "model": "/public/model_zoo/Llama-3.1-8B-Instruct",
+  "ctx": 2048,
+  "recovered_on_different_gpu": true,
+  "warm_num_cached_tokens": 2048,
+  "cold_num_cached_tokens": 0,
+  "cross_process_cas_hit": true,
+  "ttft_warm_from_durable_cas_ms": 169.1,
+  "ttft_cold_reprefill_ms": 245.5,
+  "speedup": 1.45,
+  "produced_valid_output": true,
+  "reads": "A FRESH vLLM engine on a DIFFERENT GPU loaded the target's KV from the durable on-disk content-addressed CAS written by a SIGKILLed worker (warm_num_cached_tokens ~= ctx, cold ~= 0 => a real cross-process hit into attention). Net TTFT speedup is context-dependent (KV-restore beats reprefill only at long contexts; cf Gate-1b 1.8x@4K -> 17x@32K); at short ctx the disk read can cost more than recompute.",
+  "PHASE11_KV_CAS_PASS": true
+}
