@@ -1,0 +1,123 @@
+{
+  "measured_head_to_head": {
+    "none/checkpoint (naive re-run)": {
+      "effect_dup_under_full_replay": ">=1",
+      "source": "Gate-1a"
+    },
+    "real DBOS naked @DBOS.step": {
+      "effect_dup_under_full_replay": 2,
+      "exactly_once": false,
+      "note": "FAILURE EXAMPLE, not the strong baseline"
+    },
+    "real DBOS + idempotent effect (recommended)": {
+      "effect_dup_under_full_replay": 1,
+      "exactly_once": true,
+      "note": "STRONG baseline -- matches AgentTx on simple effects (1/1)"
+    },
+    "real LangGraph + PostgresSaver": {
+      "charges": 2,
+      "receipts": 2,
+      "exactly_once": false,
+      "note": "node re-runs, no effect tx"
+    },
+    "AgentTx": {
+      "effect_dup_under_full_replay": 1,
+      "exactly_once": true,
+      "note": "phase3 300/class + phase7 distributed"
+    }
+  },
+  "capability_matrix": {
+    "columns": [
+      "effect_XO_wellbehaved",
+      "mid_effect_nonatomic",
+      "distributed_concurrent_recovery",
+      "KV_plane",
+      "durable_output_plane",
+      "workflow_plane"
+    ],
+    "rows": {
+      "DBOS + idempotency": [
+        "yes(m)",
+        "no",
+        "no",
+        "no",
+        "no",
+        "yes"
+      ],
+      "DBOS + transactional outbox": [
+        "yes",
+        "yes",
+        "no",
+        "no",
+        "no",
+        "yes"
+      ],
+      "Temporal + idempotent activities": [
+        "yes",
+        "partial",
+        "no",
+        "no",
+        "no",
+        "yes"
+      ],
+      "LangGraph + PostgresSaver": [
+        "no(m)",
+        "no",
+        "no",
+        "no",
+        "no",
+        "yes"
+      ],
+      "Atomix (2602.14849)": [
+        "yes",
+        "yes",
+        "no(single-proc)",
+        "no",
+        "no",
+        "partial"
+      ],
+      "Cordon (2606.17573)": [
+        "yes",
+        "yes",
+        "no",
+        "no",
+        "no",
+        "partial"
+      ],
+      "Concordia (2606.23521)": [
+        "n/a",
+        "n/a",
+        "n/a",
+        "yes",
+        "no",
+        "no"
+      ],
+      "Crab/DeltaBox": [
+        "n/a",
+        "n/a",
+        "n/a",
+        "partial(sandbox)",
+        "no",
+        "no"
+      ],
+      "AgentTx (this work)": [
+        "yes(m)",
+        "yes(m)",
+        "yes(m)",
+        "view*",
+        "yes(m)",
+        "yes(m)"
+      ]
+    },
+    "evidence_for_AgentTx": {
+      "effect_XO_wellbehaved": "phase3 (300 crashes/class), phase7 (400 turns x K procs, 0 double)",
+      "mid_effect_nonatomic": "phase6 tau2 mid-crash: AgentTx 15/15 vs naive 10",
+      "distributed_concurrent_recovery": "phase7: 1200/1200 actions, 0 double, real fencing",
+      "KV_plane": "view* = byte-exact fail-closed CAS (phase2) + durable cross-process reload (phase8 kv_durable); inject-into-fresh-engine-attention is TARGET",
+      "durable_output_plane": "phase9: 200 turns, persist-before-send, 0 loss/dup",
+      "workflow_plane": "WAL-as-source-of-truth + self-contained recovery (phase7 P5)"
+    }
+  },
+  "headline": "On simple-effect exactly-once, a properly-IDEMPOTENT DBOS matches AgentTx (both 1/1) -- naked DBOS (2 files) is only the failure example. AgentTx's differentiation is the columns NO baseline fills together: DISTRIBUTED concurrent recovery (fencing), MID-EFFECT crashes on NON-ATOMIC effects, a DURABLE output plane, and a single cross-plane turn-prefix contract over all of them.",
+  "note": "Temporal/Atomix/Cordon/Concordia/Crab rows are from their papers (not re-run here); see docs/RELATED_BASELINES.md. DBOS naked/idempotent + LangGraph + AgentTx are measured."
+}

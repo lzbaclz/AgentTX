@@ -1,0 +1,10 @@
+{
+  "baseline": "real-DBOS+idempotent-effect",
+  "dbos_version": "2.25.0",
+  "idempotent_effect": true,
+  "charges": 1,
+  "receipts": 1,
+  "transactional_exactly_once": true,
+  "nontransactional_duplicated": false,
+  "reads": "REAL DBOS + DBOS's recommended idempotent (content/id-addressed) effect: the receipt step re-runs on recovery but overwrites the SAME file -> exactly-once (1 file). A careful DBOS user reaches exactly-once for THIS effect."
+}

@@ -42,8 +42,13 @@ def charge_tx(order, amount):
 @DBOS.step()
 def receipt_step(order):
     d = os.path.join(STORE, "receipts"); os.makedirs(d, exist_ok=True)
-    import uuid
-    p = os.path.join(d, f"{uuid.uuid4().hex}.txt")            # non-idempotent: a new file each call
+    if os.environ.get("IDEMPOTENT_RECEIPT") == "1":
+        # DBOS's RECOMMENDED pattern: make the effect idempotent (content/id-addressed) so a
+        # step re-run on recovery overwrites the SAME file instead of creating a duplicate.
+        p = os.path.join(d, f"{WFID}.txt")
+    else:
+        import uuid
+        p = os.path.join(d, f"{uuid.uuid4().hex}.txt")        # naked non-idempotent: a new file each call
     with open(p, "w") as f:
         f.write(order); f.flush(); os.fsync(f.fileno())
     if os.environ.get("CRASH_RECEIPT") == "1":
@@ -108,16 +113,22 @@ def main():
     print(f"(run crashed with rc={rc1}; wfid={wfid})")
     nc, nr = inspect()
     import json
-    out = {"baseline": "real-DBOS", "dbos_version": __import__("importlib.metadata",fromlist=["version"]).version("dbos"),
-           "charges": nc, "receipts": nr,
+    idem = os.environ.get("IDEMPOTENT_RECEIPT") == "1"
+    out = {"baseline": "real-DBOS" + ("+idempotent-effect" if idem else " (naked step)"),
+           "dbos_version": __import__("importlib.metadata", fromlist=["version"]).version("dbos"),
+           "idempotent_effect": idem, "charges": nc, "receipts": nr,
            "transactional_exactly_once": nc == 1,
            "nontransactional_duplicated": nr > 1,
-           "reads": "REAL DBOS: transactional charge step is exactly-once (effect+checkpoint in "
-                    "one Postgres tx); the non-transactional receipt @DBOS.step re-runs on "
-                    "recovery after a crash in the effect/record window -> duplicate file. "
-                    "Confirms the Gate-1a faithful-DBOS finding against the real system."}
+           "reads": ("REAL DBOS + DBOS's recommended idempotent (content/id-addressed) effect: the "
+                     "receipt step re-runs on recovery but overwrites the SAME file -> exactly-once "
+                     "(1 file). A careful DBOS user reaches exactly-once for THIS effect."
+                     if idem else
+                     "REAL DBOS naked step: the non-transactional receipt @DBOS.step re-runs on "
+                     "recovery after a crash in the effect/record window -> duplicate file. This is "
+                     "the FAILURE EXAMPLE, not the strong baseline.")}
     os.makedirs("gate1/results", exist_ok=True)
-    json.dump(out, open("gate1/results/real_dbos_baseline.json", "w"), indent=2)
+    fn = "gate1/results/real_dbos_idempotent.json" if idem else "gate1/results/real_dbos_baseline.json"
+    json.dump(out, open(fn, "w"), indent=2)
     print(json.dumps(out, indent=2))
 
 
