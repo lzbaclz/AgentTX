@@ -1,0 +1,12 @@
+{
+  "model": "/public/model_zoo/Llama-3.1-8B-Instruct",
+  "ctx": 2048,
+  "committed_tokens": 16,
+  "client_had_seen": 8,
+  "fresh_process_recovered": true,
+  "committed_prefix_intact_from_durable_log": true,
+  "continuation_len": 8,
+  "determinism_floor_overlap_vs_original_tail": 1.0,
+  "reads": "A FRESH vLLM engine in a FRESH process (producer SIGKILLed, its KV/CUDA destroyed) reconstructed the turn from the durable token log alone: the committed prefix the client already saw is byte-intact, and generation continues from exactly that prefix (no duplicate/gap). The tail overlap vs the original is the known greedy determinism floor -- which is WHY the durable token log, not the KV, is the source of truth.",
+  "PHASE8_XPROC_PASS": true
+}
