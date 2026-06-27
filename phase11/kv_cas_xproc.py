@@ -20,9 +20,11 @@ import sys
 import time
 
 MODEL = os.environ.get("ATX_MODEL", "/public/model_zoo/Llama-3.1-8B-Instruct")
-CAS = os.environ.get("ATX_CAS", "/tmp/atx_kv_cas_xproc")
-CTX = 2048
-TOKLOG = "/tmp/atx_kv_cas_target.json"
+CTX = int(os.environ.get("ATX_CTX", "2048"))
+CAS = os.environ.get("ATX_CAS", f"/tmp/atx_kv_cas_xproc_{CTX}")
+TOKLOG = f"/tmp/atx_kv_cas_target_{CTX}.json"
+CPU_BYTES = max(768, (CTX // 16) * 3 * 2) * 1024 * 1024     # hold ~2 contexts so offload stages then evicts
+RESULT = f"phase11/results/kv_cas_xproc_{CTX}.json"
 
 
 def _llm():
@@ -34,7 +36,7 @@ def _llm():
                    kv_connector="OffloadingConnector", kv_role="kv_both",
                    kv_connector_extra_config={
                        "spec_name": "TieringOffloadingSpec",
-                       "cpu_bytes_to_use": 768 * 1024 * 1024,
+                       "cpu_bytes_to_use": CPU_BYTES,
                        "block_size": 16,
                        "secondary_tiers": [{"type": "fs_python", "root_dir": CAS}]}))
 
@@ -93,7 +95,7 @@ def recover():
                     "1.8x@4K -> 17x@32K); at short ctx the disk read can cost more than recompute."}
     out["PHASE11_KV_CAS_PASS"] = bool(out["produced_valid_output"] and out["cross_process_cas_hit"])
     os.makedirs("phase11/results", exist_ok=True)
-    json.dump(out, open("phase11/results/kv_cas_xproc.json", "w"), indent=2)
+    json.dump(out, open(RESULT, "w"), indent=2)
     print(json.dumps(out, indent=2))
     return 0 if out["PHASE11_KV_CAS_PASS"] else 1
 

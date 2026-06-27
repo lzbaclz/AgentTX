@@ -24,8 +24,8 @@ hashes → the CAS hits cross-process. (A real, non-obvious systems insight for 
 - **Cross-process** (`phase11/kv_cas_xproc.py`): producer fills the CAS then is hard-`SIGKILL`ed;
   a **FRESH vLLM engine on a DIFFERENT GPU** requests the same context →
   **`warm_num_cached_tokens = 2048` (full hit), cold = 0**, output valid, **1.45× faster than cold
-  reprefill** (169 ms vs 245 ms) even at 2K. The speedup grows with context (cf Gate-1b
-  1.8×@4K → 17×@32K); at 2K the win is already positive.
+  reprefill** even at 2K. **Speedup grows with context: 1.45× @2K (169 vs 245 ms) → 1.92× @8K
+  (407 vs 782 ms)** (full 8192-token hit), consistent with the KV-restore-vs-reprefill curve.
 
 **PHASE11_KV_CAS_PASS = true.** The KV materialized view is now durable AND loads into a fresh
 worker's attention across a real cross-process / cross-device crash — not just a same-process proxy.
