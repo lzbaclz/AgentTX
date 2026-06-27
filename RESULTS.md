@@ -48,17 +48,28 @@ prefix** — no duplicate/lost effects, no ghost observations, no duplicated/los
 - **[MEASURED-PROXY]** "100,000 / 120,900 fault injections" = **single-owner, in-process,
   protocol-model schedules** (Python-exception crashes, one SQLite, fixed output). Rigorous as a
   state-machine test; NOT whole-stack. Real-process concurrency evidence is `phase7/` (400×K procs).
-- **[PROTOTYPE]** Streaming = output sequence/dedup protocol (in-memory `StreamLog`); proves
-  reconnect+dedup, not durable persist-before-send.
+- **[PROVEN]** Durable **output plane** (`phase9/durable_stream_gate.py`): persist-before-send, 300
+  turns (163 worker deaths, 24 client restarts, 134 ACK drops, 9 co-deaths) → 300/300 exactly-once,
+  0 loss/dup. (Upgrades the phase4 in-memory streaming prototype.)
+- **[PROVEN]** **Cross-process recovery** (`phase8/xproc_recovery.py`): a fresh vLLM engine on a
+  *different GPU* reconstructs the turn from the durable token log after a real `SIGKILL` — committed
+  prefix byte-intact, no dup/gap. (Closes "recover elsewhere"; Gate-2b/Phase-5 were same-process.)
+- **[PROVEN]** **Exhaustive model checker** (`agenttx/dmodel.py`): all 2-coordinator interleavings
+  per class, 0 violations, non-vacuous (304 caught when guards removed).
+- **[PROVEN]** **SOTA head-to-head** (`phase10/`, `docs/RELATED_BASELINES.md`): DBOS+idempotency ties
+  AgentTx on simple effects; AgentTx differentiates on distributed/ mid-effect/ durable-output/ cross-plane.
 - Steady-state durability overhead: **0.70 ms/turn (~0.7%)** (Gate-2c).
 
 ## Honest scope — what is NOT done (TARGET)
-- Durable **cross-process KV restore** into a fresh vLLM worker's attention after a real `SIGKILL`
-  (down-payment: `phase8/`). The 4.84–17× numbers do NOT yet ride on AgentTx's durable CAS.
-- Durable **output log** (persist-before-send) + stream-worker/coordinator co-death + client restart.
-- **Full SOTA matrix**: DBOS + idempotency-key / + transactional outbox; Temporal; Atomix; Cordon.
-- **End-to-end agent-task success** with the gateway + fault injection **inside the live LLM
-  orchestrator loop** (down-payment: `phase8/tau2_live_ft.py`).
+- Durable KV restore **into a fresh vLLM worker's attention** to resume *decoding* (the KV-speed
+  path). Cross-process recovery *correctness* is done (`phase8/xproc_recovery.py`) via the durable
+  token log; durable KV bytes survive `SIGKILL` byte-exact (`phase8/kv_durable.py`); injecting them
+  into a new engine's attention for speed is the remaining piece. The 4.84–17× numbers ride on the
+  same-process CPU-offload proxy, not this path.
+- **Run** Temporal / Atomix / Cordon under our exact fault harness (their rows in the SOTA capability
+  matrix are from their papers; DBOS{naked,+idempotency,+outbox} + LangGraph + AgentTx are measured).
+- **High agent-task-success** on τ²-bench with a stronger model (live FT exactly-once is proven in
+  `phase8/tau2_live_ft.py`; raw task reward is bounded by the local 8B model).
 - A 2nd hardware/topology. Stack: dual A100, vLLM 0.22.1, Postgres 18.4, DBOS 2.25.0, LangGraph 1.2.6.
 
 This is **not** "first agent transaction runtime" (Atomix/Cordon precede us); positioning =

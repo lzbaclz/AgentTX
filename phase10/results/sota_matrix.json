@@ -114,7 +114,7 @@
       "mid_effect_nonatomic": "phase6 tau2 mid-crash: AgentTx 15/15 vs naive 10",
       "distributed_concurrent_recovery": "phase7: 1200/1200 actions, 0 double, real fencing",
       "KV_plane": "view* = byte-exact fail-closed CAS (phase2) + durable cross-process reload (phase8 kv_durable); inject-into-fresh-engine-attention is TARGET",
-      "durable_output_plane": "phase9: 200 turns, persist-before-send, 0 loss/dup",
+      "durable_output_plane": "phase9: 300 turns, persist-before-send, 0 loss/dup",
       "workflow_plane": "WAL-as-source-of-truth + self-contained recovery (phase7 P5)"
     }
   },

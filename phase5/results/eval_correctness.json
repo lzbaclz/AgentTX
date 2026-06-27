@@ -1,9 +1,9 @@
 {
-  "trials": 3000,
+  "trials": 100000,
   "mode_counts": {
-    "recovery_crash": 625,
-    "crash": 1784,
-    "kv_corrupt": 591
+    "recovery_crash": 19991,
+    "crash": 60044,
+    "kv_corrupt": 19965
   },
   "violations": {
     "dup_charge": 0,

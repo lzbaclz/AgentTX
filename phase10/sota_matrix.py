@@ -25,11 +25,15 @@ def load(p, d=None):
 
 def main():
     dbos_naked = load("gate1/results/real_dbos_baseline.json")
-    dbos_idem = load("gate1/results/real_dbos_idempotent.json")
+    dbos_rec = load("gate1/results/dbos_recommended.json")          # canonical: idempotency-key + outbox
+    _vars = {v["variant"]: v for v in dbos_rec.get("variants", [])}
+    dbos_idem = {"receipts": _vars.get("idempotency_key", {}).get("receipts"),
+                 "transactional_exactly_once": _vars.get("idempotency_key", {}).get("transactional_exactly_once"),
+                 "nontransactional_duplicated": not _vars.get("idempotency_key", {}).get("nontransactional_exactly_once", False)}
     lang = load("gate1/results/real_langgraph_baseline.json")
     p6 = load("phase6/results/tau2_midcrash.json")
     p7 = load("phase7/results/concurrent_gate.json")
-    p9 = load("phase9/results/output_gate.json")
+    p9 = load("phase9/results/durable_stream_gate.json")            # canonical durable output gate
 
     # ---- measured head-to-head on the SAME non-transactional-effect crash workload ----
     measured = {
