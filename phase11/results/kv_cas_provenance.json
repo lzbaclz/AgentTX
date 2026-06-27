@@ -1,0 +1,10 @@
+{
+  "ctx": 2048,
+  "match_num_cached_tokens": 2048,
+  "mismatch_num_cached_tokens": 0,
+  "match_loaded_durable_kv": true,
+  "mismatch_failed_closed": true,
+  "both_outputs_valid": true,
+  "reads": "Matching provenance loads KV from the durable CAS into a fresh worker's attention (cached==ctx); a mismatched provenance (RoPE differs, so vLLM's own block hashes still match) FAILS CLOSED at the AgentTx tier (cached==0) and recomputes -> KV under a different config is never silently loaded.",
+  "PHASE11B_PROVENANCE_PASS": true
+}
