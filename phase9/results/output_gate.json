@@ -1,0 +1,11 @@
+{
+  "gate": "durable output exactly-once across real stream-worker death + client restart (PostgreSQL)",
+  "turns": 200,
+  "tokens_per_turn": 12,
+  "client_out_of_order": 0,
+  "client_lost": 0,
+  "client_duplicate": 0,
+  "persist_before_send_violations": 0,
+  "PHASE9_PASS": true,
+  "reads": "Every committed output token reaches the client exactly once / in order / no loss across hard mid-stream os._exit + fresh resumers + client restart; every token the client saw was persisted to the durable log first (persist-before-send)."
+}
