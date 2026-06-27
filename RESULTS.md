@@ -62,6 +62,9 @@ prefix** — no duplicate/lost effects, no ghost observations, no duplicated/los
   connector + durable on-disk content-addressed tier lets a fresh engine on a *different GPU* load KV
   written by a `SIGKILL`ed worker — full cross-process hit, **1.45×@2K → 1.92×@8K** vs reprefill
   (grows with ctx). The KV-speed path is now durable + cross-process, not a same-process proxy.
+- **[PROVEN]** **AgentTx provenance fail-closed on the CAS** (`phase11b/`, custom `agenttx_cas` tier):
+  matching provenance loads (cached=2048); a mismatched provenance fails closed (cached=0 → recompute)
+  even when vLLM's own block hashes match — KV under a different model/config is never silently loaded.
 - Steady-state durability overhead: **0.70 ms/turn (~0.7%)** (Gate-2c).
 
 ## Honest scope — what is NOT done (TARGET)
@@ -69,8 +72,10 @@ prefix** — no duplicate/lost effects, no ghost observations, no duplicated/los
   vLLM connector (`OffloadingConnector` + `TieringOffloadingSpec` + `fs_python` durable CAS) loads KV
   from an on-disk content-addressed store written by a `SIGKILL`ed worker into a FRESH engine's
   attention on a DIFFERENT GPU — full cross-process hit, **1.45×@2K → 1.92×@8K** (grows with ctx).
-  (Required pinning `PYTHONHASHSEED` — vLLM block hashes are `os.urandom`-seeded otherwise.) Remaining
-  polish: AgentTx provenance fail-closed *on top of* the CAS + turn-LSN manifests.
+  (Required pinning `PYTHONHASHSEED` — vLLM block hashes are `os.urandom`-seeded otherwise.)
+  **AgentTx provenance fail-closed is also DONE** (`phase11b`, `agenttx_cas` tier): a mismatched
+  provenance (model/dtype/RoPE/adapter) fails closed → recompute, so KV under a different config is
+  never silently loaded. Remaining polish: turn-LSN-addressed manifests.
 - **Run** Temporal / Atomix / Cordon under our exact fault harness (their rows in the SOTA capability
   matrix are from their papers; DBOS{naked,+idempotency,+outbox} + LangGraph + AgentTx are measured).
 - **High agent-task-success** on τ²-bench with a stronger model (live FT exactly-once is proven in
