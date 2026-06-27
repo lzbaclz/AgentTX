@@ -58,14 +58,19 @@ prefix** — no duplicate/lost effects, no ghost observations, no duplicated/los
   per class, 0 violations, non-vacuous (304 caught when guards removed).
 - **[PROVEN]** **SOTA head-to-head** (`phase10/`, `docs/RELATED_BASELINES.md`): DBOS+idempotency ties
   AgentTx on simple effects; AgentTx differentiates on distributed/ mid-effect/ durable-output/ cross-plane.
+- **[PROVEN]** **Durable KV → fresh worker's attention** (`phase11/`): a custom-configured vLLM
+  connector + durable on-disk content-addressed tier lets a fresh engine on a *different GPU* load KV
+  written by a `SIGKILL`ed worker — full cross-process hit, **1.45×@2K → 1.92×@8K** vs reprefill
+  (grows with ctx). The KV-speed path is now durable + cross-process, not a same-process proxy.
 - Steady-state durability overhead: **0.70 ms/turn (~0.7%)** (Gate-2c).
 
 ## Honest scope — what is NOT done (TARGET)
-- Durable KV restore **into a fresh vLLM worker's attention** to resume *decoding* (the KV-speed
-  path). Cross-process recovery *correctness* is done (`phase8/xproc_recovery.py`) via the durable
-  token log; durable KV bytes survive `SIGKILL` byte-exact (`phase8/kv_durable.py`); injecting them
-  into a new engine's attention for speed is the remaining piece. The 4.84–17× numbers ride on the
-  same-process CPU-offload proxy, not this path.
+- ~~Durable KV restore into a fresh vLLM worker's attention~~ **DONE (`phase11/`)**: a custom-configured
+  vLLM connector (`OffloadingConnector` + `TieringOffloadingSpec` + `fs_python` durable CAS) loads KV
+  from an on-disk content-addressed store written by a `SIGKILL`ed worker into a FRESH engine's
+  attention on a DIFFERENT GPU — full cross-process hit, **1.45×@2K → 1.92×@8K** (grows with ctx).
+  (Required pinning `PYTHONHASHSEED` — vLLM block hashes are `os.urandom`-seeded otherwise.) Remaining
+  polish: AgentTx provenance fail-closed *on top of* the CAS + turn-LSN manifests.
 - **Run** Temporal / Atomix / Cordon under our exact fault harness (their rows in the SOTA capability
   matrix are from their papers; DBOS{naked,+idempotency,+outbox} + LangGraph + AgentTx are measured).
 - **High agent-task-success** on τ²-bench with a stronger model (live FT exactly-once is proven in
